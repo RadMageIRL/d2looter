@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Only this app's own files run, and the page cannot contact any server. The hash is the inline
+       theme script below; tests/run.mjs recomputes it, so editing that script means updating it. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-cDWN5AEh7lhyBR2IomypGGGKgk+68VTH+jzGf+q9He4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <script>
+    // Apply a saved theme before first paint. No attribute means "follow the system".
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('d2looter:v1:settings') || '{}');
+        if (s.theme === 'light' || s.theme === 'dark' || s.theme === 'unique') document.documentElement.setAttribute('data-theme', s.theme);
+      } catch (e) { /* storage blocked: system theme */ }
+    })();
+  </script>
+  <title>D2Looter v0.1 - Diablo II Drop Calculator, Item Search &amp; Holy Grail | RadMage Labs</title>
+  <meta name="description" content="Diablo II and Diablo II: Resurrected loot companion: item search, drop chances from the game's own treasure classes, an odds calculator, a Holy Grail tracker, Magic Find and runewords.">
+  <meta name="theme-color" content="#131313">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-mark" src="favicon.svg" alt="">
+      <span class="brand-text">
+        <a class="brand-name" href="#items">D2Looter</a>
+        <span class="tagline">v0.1 · <a href="https://radmagelabs.com/">RadMage Labs</a></span>
+      </span>
+    </div>
+    <div class="top-controls">
+      <label for="profile">Game version</label>
+      <select id="profile" class="select"></select>
+      <button type="button" id="theme" class="button" aria-label="Color theme">Theme</button>
+    </div>
+  </header>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#items" data-view="items">Items</a>
+    <a href="#calc" data-view="calc">Drop calculator</a>
+    <a href="#sim" data-view="sim">Odds</a>
+    <a href="#grail" data-view="grail">Holy Grail</a>
+    <a href="#mf" data-view="mf">Magic Find</a>
+    <a href="#runes" data-view="runes">Runes &amp; runewords</a>
+    <a href="#accuracy" data-view="accuracy">Accuracy</a>
+  </nav>
+
+  <main id="main" tabindex="-1">
+    <div id="profile-note"></div>
+    <section id="view-items" data-view="items" hidden></section>
+    <section id="view-item" data-view="item" hidden></section>
+    <section id="view-calc" data-view="calc" hidden></section>
+    <section id="view-sim" data-view="sim" hidden></section>
+    <section id="view-grail" data-view="grail" hidden></section>
+    <section id="view-mf" data-view="mf" hidden></section>
+    <section id="view-runes" data-view="runes" hidden></section>
+    <section id="view-accuracy" data-view="accuracy" hidden></section>
+    <noscript><p>D2Looter needs JavaScript. Everything runs in your browser; nothing is sent anywhere.</p></noscript>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>D2Looter is a free fan tool by <a href="https://radmagelabs.com/">RadMage Labs</a>. Not affiliated with or endorsed by Blizzard Entertainment.</span>
+      <span>Game data from Blizzard's games, via <a href="https://github.com/blizzhackers/d2data">blizzhackers/d2data</a> · <a href="#accuracy">sources and accuracy</a></span>
+    </div>
+  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="js/core/store.js"></script>
+  <script src="js/core/prob.js"></script>
+  <script src="js/core/engine.js"></script>
+  <script src="js/core/props.js"></script>
+  <script src="js/core/catalog.js"></script>
+  <script src="js/core/sources.js"></script>
+  <script src="js/core/grail.js"></script>
+  <script src="js/profiles.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

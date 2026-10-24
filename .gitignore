@@ -1,0 +1,6 @@
+# Downloaded game tables and oracle files (node tools/fetch-data.mjs re-downloads and hash-checks them)
+tools/.cache/
+# Operating-system clutter
+Thumbs.db
+Desktop.ini
+.DS_Store

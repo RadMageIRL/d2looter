@@ -1,0 +1,114 @@
+{
+  "source": "silospen/DropCalc src/main/kotlin/com/silospen/dropcalc/areas/HardcodedAreas.kt at commit 73d31110aaec7a5a6efcbaa403dd1e781980d701 (MIT). Facts only: which area each boss and superunique is placed in.",
+  "superuniques": {
+    "Bishibosh": "Act 1 - Wilderness 2",
+    "Bonebreak": "Act 1 - Crypt 1 A",
+    "Coldcrow": "Act 1 - Cave 2",
+    "Rakanishu": "Act 1 - Wilderness 3",
+    "Treehead WoodFist": "Act 1 - Wilderness 4",
+    "Griswold": "Act 1 - Tristram",
+    "The Countess": "Act 1 - Crypt 3 E",
+    "Pitspawn Fouldog": "Act 1 - Jail 2",
+    "Boneash": "Act 1 - Cathedral",
+    "Radament": "Act 2 - Sewer 1 C",
+    "Bloodwitch the Wild": "Act 2 - Tomb 2 Treasure",
+    "Fangskin": "Act 2 - Tomb 3 Treasure",
+    "Beetleburst": "Act 2 - Desert 3",
+    "Leatherarm": "Act 2 - Tomb 1 Treasure",
+    "Coldworm the Burrower": "Act 2 - Lair 1 Treasure",
+    "Fire Eye": "Act 2 - Basement 3",
+    "Dark Elder": "Act 2 - Desert 4",
+    "The Summoner": "Act 2 - Arcane",
+    "Ancient Kaa the Soulless": "Act 2 - Tomb Tal 1",
+    "The Smith": "Act 1 - Barracks",
+    "Web Mage the Burning": "Act 3 - Spider 2",
+    "Witch Doctor Endugu": "Act 3 - Dungeon 2 Treasure",
+    "Stormtree": "Act 3 - Kurast 1",
+    "Sarina the Battlemaid": "Act 3 - Temple 1",
+    "Icehawk Riftwing": "Act 3 - Sewer 1",
+    "Ismail Vilehand": "Act 3 - Travincal",
+    "Geleb Flamefinger": "Act 3 - Travincal",
+    "Bremm Sparkfist": "Act 3 - Mephisto 3",
+    "Toorc Icefist": "Act 3 - Travincal",
+    "Wyand Voidfinger": "Act 3 - Mephisto 3",
+    "Maffer Dragonhand": "Act 3 - Mephisto 3",
+    "Infector of Souls": "Act 4 - Diablo 1",
+    "Lord De Seis": "Act 4 - Diablo 1",
+    "Grand Vizier of Chaos": "Act 4 - Diablo 1",
+    "The Cow King": "Act 1 - Moo Moo Farm",
+    "Corpsefire": "Act 1 - Cave 1",
+    "The Feature Creep": "Act 4 - Lava 1",
+    "Siege Boss": "Act 5 - Siege 1",
+    "Ancient Barbarian 1": "Act 5 - Mountain Top",
+    "Ancient Barbarian 2": "Act 5 - Mountain Top",
+    "Ancient Barbarian 3": "Act 5 - Mountain Top",
+    "Bonesaw Breaker": "Act 5 - Ice Cave 2",
+    "Dac Farren": "Act 5 - Siege 1",
+    "Megaflow Rectifier": "Act 5 - Barricade 1",
+    "Eyeback Unleashed": "Act 5 - Barricade 1",
+    "Threash Socket": "Act 5 - Barricade 2",
+    "Pindleskin": "Act 5 - Temple Entrance",
+    "Snapchip Shatter": "Act 5 - Ice Cave 3A",
+    "Sharp Tooth Sayer": "Act 5 - Barricade 1",
+    "Frozenstein": "Act 5 - Ice Cave 1A",
+    "Nihlathak Boss": "Act 5 - Temple Boss",
+    "Baal Subject 1": "Act 5 - Throne Room",
+    "Baal Subject 2": "Act 5 - Throne Room",
+    "Baal Subject 3": "Act 5 - Throne Room",
+    "Baal Subject 4": "Act 5 - Throne Room",
+    "Baal Subject 5": "Act 5 - Throne Room"
+  },
+  "bosses": {
+    "andariel": [
+      "Act 1 - Catacombs 4"
+    ],
+    "duriel": [
+      "Act 2 - Duriel's Lair"
+    ],
+    "radament": [
+      "Act 2 - Sewer 1 C"
+    ],
+    "mephisto": [
+      "Act 3 - Mephisto 3"
+    ],
+    "diablo": [
+      "Act 4 - Diablo 1"
+    ],
+    "summoner": [
+      "Act 2 - Arcane"
+    ],
+    "izual": [
+      "Act 4 - Mesa 2"
+    ],
+    "bloodraven": [
+      "Act 1 - Graveyard"
+    ],
+    "griswold": [
+      "Act 1 - Tristram"
+    ],
+    "baalcrab": [
+      "Act 5 - World Stone"
+    ],
+    "putriddefiler1": [
+      "Act 5 - Temple 2",
+      "Act 5 - Temple Boss"
+    ],
+    "putriddefiler2": [
+      "Act 5 - Temple Boss",
+      "Act 5 - Baal Temple 1"
+    ],
+    "nihlathakboss": [
+      "Act 5 - Temple Boss"
+    ],
+    "putriddefiler3": [
+      "Act 5 - Baal Temple 1",
+      "Act 5 - Baal Temple 3"
+    ],
+    "putriddefiler4": [
+      "Act 5 - Baal Temple 3"
+    ],
+    "putriddefiler5": [
+      "Act 5 - Baal Temple 3"
+    ]
+  }
+}
