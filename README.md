@@ -5,9 +5,10 @@ Item search, drop chances worked out from the game's own treasure classes, an od
 a Holy Grail tracker, Magic Find, and a rune and runeword reference. It runs entirely in the
 browser: no account, no ads, no analytics, and nothing is sent anywhere.
 
-This is v0.1, a local prototype.
+**Use it at [radmagelabs.com/d2looter](https://radmagelabs.com/d2looter/)** (also at
+[radmageirl.github.io/d2looter](https://radmageirl.github.io/d2looter/)). This is v0.1.0.
 
-## Run it
+## Run it locally
 
 On Windows, double-click `launch.cmd` (or open `index.html` in a browser). Nothing needs to be
 installed or built.

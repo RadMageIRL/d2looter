@@ -2,7 +2,7 @@
 // not depend on: point PLAYWRIGHT_DIR at a folder where `npm i playwright` was run (and
 // PLAYWRIGHT_BROWSERS_PATH at its browsers, if they are not in the default place).
 //
-//   PLAYWRIGHT_DIR=... node tests/browsers.mjs [--shots DIR] [--only chromium,firefox,webkit]
+//   PLAYWRIGHT_DIR=... node tests/browsers.mjs [--shots DIR] [--only chromium,firefox,webkit] [--base URL]
 //
 // Without Playwright it prints SKIPPED and exits with code 2: a browser that did not run is never
 // counted as passing.
@@ -37,7 +37,10 @@ let passed = 0, failed = 0;
 let step = ''; // the step a check is on, named in its failure
 
 const server = await serve({ mounts: [{ prefix: '/d2looter/', dir: ROOT }] });
-const base = `${server.origin}/d2looter/`;
+// --base https://radmagelabs.com/d2looter/ runs the same checks against a deployed copy.
+const base = arg('--base') || `${server.origin}/d2looter/`;
+const origin = new URL(base).origin;
+if (arg('--base')) console.log(`testing ${base}`);
 
 // Problems a page reports: errors, failed or outside requests.
 function watch(page) {
@@ -46,7 +49,7 @@ function watch(page) {
   page.on('pageerror', (e) => problems.push('pageerror: ' + e.message));
   page.on('requestfailed', (r) => { if (!/^blob:/.test(r.url())) problems.push('failed: ' + r.url() + ' ' + (r.failure() || {}).errorText); });
   page.on('response', (r) => { if (r.status() >= 400) problems.push('HTTP ' + r.status() + ' ' + r.url()); });
-  page.on('request', (r) => { const u = r.url(); if (!u.startsWith(server.origin) && !u.startsWith('file:') && !u.startsWith('data:') && !u.startsWith('blob:')) problems.push('outside request: ' + u); });
+  page.on('request', (r) => { const u = r.url(); if (!u.startsWith(origin) && !u.startsWith('file:') && !u.startsWith('data:') && !u.startsWith('blob:')) problems.push('outside request: ' + u); });
   return problems;
 }
 // Layout faults: sideways page scroll, and text cut off inside a control.

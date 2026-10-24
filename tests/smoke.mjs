@@ -181,6 +181,19 @@ try {
     clean();
   });
 
+  await test('served at the bare /d2looter (no slash, no redirect), the page adds the slash and loads every file inside the base', async () => {
+    const bare = await serve({ mounts: [{ prefix: '/d2looter/', dir: ROOT }], slash: 'none' });
+    try {
+      const p3 = await chrome.newPage();
+      await p3.goto(`${bare.origin}/d2looter#calc`);
+      await p3.waitFor("location.pathname === '/d2looter/' && document.querySelector('.result-big .big')", 15000);
+      assert.equal(await p3.eval('location.hash'), '#calc', 'the hash survives');
+      assert.deepEqual(bare.outside(), [], 'requests outside /d2looter/');
+      assert.ok(bare.requests.filter((r) => /\.(js|css|svg)$/.test(r.path)).length >= 10, 'assets came from the base');
+      assert.deepEqual(p3.problems, []);
+    } finally { await bare.close(); }
+  });
+
   await test('opens straight from the file (file://), as launch.cmd does', async () => {
     const p2 = await chrome.newPage();
     await p2.goto(pathToFileURL(join(ROOT, 'index.html')).href + '#calc');

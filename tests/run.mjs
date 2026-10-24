@@ -9,7 +9,7 @@
 //  - blizzhackers/d2data's C++ drop solver output (precalctc), which models the six-item cap;
 //  - a second, independent copy of the tables (Silospen's .txt files) for the data itself.
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -978,6 +978,27 @@ test('index.html: the Content-Security-Policy hash matches the inline script, an
   assert.match(csp, /connect-src 'none'/);
   assert.ok(!/https?:/.test(csp), 'no outside sources allowed');
   assert.ok(!/ on[a-z]+="/i.test(html), 'no inline event handlers');
+});
+test('release metadata: one version on every asset, canonical and preview tags, the trailing-slash guard', () => {
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  const version = readFileSync(join(ROOT, 'js', 'app.js'), 'utf8').match(/var VERSION = '([^']+)'/)[1];
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  const refs = [...html.matchAll(/\b(?:src|href)="([^"#:]+)"/g)].map((m) => m[1]).filter((r) => !r.startsWith('https'));
+  assert.ok(refs.length >= 12, refs.join(', '));
+  for (const r of refs) assert.ok(r.endsWith('?v=' + version), `${r} lacks ?v=${version}`);
+  for (const r of refs) assert.ok(statSync(join(ROOT, r.split('?')[0])).isFile(), `${r} exists`);
+  assert.ok(html.includes(`"softwareVersion":"${version}"`), 'JSON-LD version');
+  assert.ok(readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8').includes(`## v${version} `), 'CHANGELOG heading');
+  const canonical = 'https://radmagelabs.com/d2looter/';
+  assert.ok(html.includes(`<link rel="canonical" href="${canonical}">`));
+  assert.ok(html.includes(`<meta property="og:url" content="${canonical}">`));
+  const desc = html.match(/<meta name="description" content="([^"]+)">/)[1];
+  assert.ok(html.includes(`<meta property="og:description" content="${desc}">`), 'og:description repeats the description');
+  const ld = JSON.parse(html.match(/<script type="application\/ld\+json">([^<]+)<\/script>/)[1]);
+  assert.equal(ld.url, canonical);
+  assert.equal(ld.description, desc);
+  assert.match(html, /location\.replace\(p \+ '\/' \+ location\.search \+ location\.hash\)/, 'trailing-slash guard');
+  assert.ok(existsSync(join(ROOT, '.nojekyll')), '.nojekyll for GitHub Pages');
 });
 test('no em dashes in the project files', () => {
   const skip = new Set(['.git', 'tools/.cache', 'node_modules']);

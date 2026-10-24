@@ -9,6 +9,9 @@
   var THEMES = ['system', 'light', 'dark', 'unique'];
   var THEME_NAMES = { system: 'System', light: 'Light', dark: 'Dark', unique: 'Unique' };
   var PAGE = 60;
+  // Matches the ?v= on every asset in index.html (tests/run.mjs checks), so a release reaches
+  // browsers and hosts that cache files for a while.
+  var VERSION = '0.1.0';
 
   // ---------------------------------------------------------------------------------------------
   // helpers
@@ -122,7 +125,7 @@
     };
     if (window.D2LOOTER_DATA && window.D2LOOTER_DATA[id]) return go();
     var s = document.createElement('script');
-    s.src = meta.file;
+    s.src = meta.file + '?v=' + VERSION;
     s.onload = go;
     s.onerror = function () { clear($('main')).appendChild(h('p', { class: 'unavailable' }, 'Could not load ' + meta.file + '.')); };
     document.body.appendChild(s);

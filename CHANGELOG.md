@@ -1,6 +1,8 @@
 # Changelog
 
-## v0.1 (prototype, not released)
+## v0.1.0 (2026-10-23)
+
+First public release, at radmagelabs.com/d2looter/ and radmageirl.github.io/d2looter/.
 
 - Item search over every unique, set item, rune and base item, with in-game property text and
   the best boss, superunique and area monster sources for each item.

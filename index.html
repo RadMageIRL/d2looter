@@ -4,9 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Only this app's own files run, and the page cannot contact any server. The hash is the inline
-       theme script below; tests/run.mjs recomputes it, so editing that script means updating it. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-cDWN5AEh7lhyBR2IomypGGGKgk+68VTH+jzGf+q9He4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+       script below (trailing slash and theme); tests/run.mjs recomputes it, so editing that script means updating it. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qT9t7bGBBFW2xK6DRdZbgO4xqZpbIzUOVV0J2K+4rVM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <script>
+    // Served as "/d2looter" instead of "/d2looter/", every relative asset would resolve against the
+    // parent folder. Add the slash before anything else loads; hosts normally redirect already.
+    (function () {
+      var p = location.pathname, last = p.slice(p.lastIndexOf('/') + 1);
+      if (/^https?:$/.test(location.protocol) && last && last.indexOf('.') < 0) {
+        location.replace(p + '/' + location.search + location.hash);
+      }
+    })();
     // Apply a saved theme before first paint. No attribute means "follow the system".
     (function () {
       try {
@@ -17,15 +25,27 @@
   </script>
   <title>D2Looter v0.1 - Diablo II Drop Calculator, Item Search &amp; Holy Grail | RadMage Labs</title>
   <meta name="description" content="Diablo II and Diablo II: Resurrected loot companion: item search, drop chances from the game's own treasure classes, an odds calculator, a Holy Grail tracker, Magic Find and runewords.">
+  <link rel="canonical" href="https://radmagelabs.com/d2looter/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="RadMage Labs">
+  <meta property="og:url" content="https://radmagelabs.com/d2looter/">
+  <meta property="og:title" content="D2Looter: Diablo II Drop Calculator, Item Search &amp; Holy Grail">
+  <meta property="og:description" content="Diablo II and Diablo II: Resurrected loot companion: item search, drop chances from the game's own treasure classes, an odds calculator, a Holy Grail tracker, Magic Find and runewords.">
+  <meta property="og:image" content="https://radmagelabs.com/assets/og/d2looter.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="D2Looter's drop calculator: the Stone of Jordan from Hell Baal, the chance per kill and the kills needed for 50 to 99%">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"D2Looter","url":"https://radmagelabs.com/d2looter/","description":"Diablo II and Diablo II: Resurrected loot companion: item search, drop chances from the game's own treasure classes, an odds calculator, a Holy Grail tracker, Magic Find and runewords.","applicationCategory":"UtilitiesApplication","operatingSystem":"Any (runs in a web browser)","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"softwareVersion":"0.1.0","screenshot":"https://radmagelabs.com/assets/og/d2looter.png","about":{"@type":"VideoGame","name":"Diablo II: Resurrected"},"author":{"@type":"Person","name":"RadMageIRL","url":"https://github.com/RadMageIRL"},"sameAs":"https://github.com/RadMageIRL/d2looter"}</script>
   <meta name="theme-color" content="#131313">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="favicon.svg?v=0.1.0" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css?v=0.1.0">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="brand">
-      <img class="brand-mark" src="favicon.svg" alt="">
+      <img class="brand-mark" src="favicon.svg?v=0.1.0" alt="">
       <span class="brand-text">
         <a class="brand-name" href="#items">D2Looter</a>
         <span class="tagline">v0.1 · <a href="https://radmagelabs.com/">RadMage Labs</a></span>
@@ -68,14 +88,14 @@
   </footer>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="js/core/store.js"></script>
-  <script src="js/core/prob.js"></script>
-  <script src="js/core/engine.js"></script>
-  <script src="js/core/props.js"></script>
-  <script src="js/core/catalog.js"></script>
-  <script src="js/core/sources.js"></script>
-  <script src="js/core/grail.js"></script>
-  <script src="js/profiles.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/core/store.js?v=0.1.0"></script>
+  <script src="js/core/prob.js?v=0.1.0"></script>
+  <script src="js/core/engine.js?v=0.1.0"></script>
+  <script src="js/core/props.js?v=0.1.0"></script>
+  <script src="js/core/catalog.js?v=0.1.0"></script>
+  <script src="js/core/sources.js?v=0.1.0"></script>
+  <script src="js/core/grail.js?v=0.1.0"></script>
+  <script src="js/profiles.js?v=0.1.0"></script>
+  <script src="js/app.js?v=0.1.0"></script>
 </body>
 </html>
