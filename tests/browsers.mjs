@@ -272,31 +272,34 @@ for (const engine of only) {
     assert.deepEqual(problems, []);
   });
 
+  // In a fresh profile: the checks above leave the panel open in the page's own settings, and a
+  // reload while that page reads the news would cancel the read.
   await check(engine, 'news panel: closed until opened, the headlines link to Blizzard in a new tab, the keyboard toggles it; Share copies the address', async () => {
-    await page.goto(base + '#items');
-    await page.waitForFunction(VISIBLE);
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
-    await page.waitForFunction(VISIBLE);
-    assert.equal(await page.evaluate(() => document.getElementById('news').open), false);
-    await page.click('#news > summary');
-    await page.waitForFunction(newsShown);
-    const links = await page.$$eval('#news-list a', (as) => as.map((a) => [a.href, a.target, a.rel]));
+    const c = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+    const p = await c.newPage();
+    const pr = watch(p);
+    await p.goto(base + '#items');
+    await p.waitForFunction(VISIBLE);
+    assert.equal(await p.evaluate(() => document.getElementById('news').open), false);
+    await p.click('#news > summary');
+    await p.waitForFunction(newsShown);
+    const links = await p.$$eval('#news-list a', (as) => as.map((a) => [a.href, a.target, a.rel]));
     assert.ok(links.length <= 6 && links.every(([h, t, r]) => h.startsWith('https://news.blizzard.com/en-us/') && t === '_blank' && /noopener/.test(r)), JSON.stringify(links));
     assert.equal(links.length > 0, newsHere, newsHere ? 'headlines' : 'no headlines where the list is not passed through');
     step = 'Enter on the summary closes it';
-    await page.focus('#news > summary');
-    await page.keyboard.press('Enter');
-    await page.waitForFunction(() => !document.getElementById('news').open);
+    await p.focus('#news > summary');
+    await p.keyboard.press('Enter');
+    await p.waitForFunction(() => !document.getElementById('news').open);
     step = 'Share without a share sheet';
-    await page.evaluate(() => {
+    await p.evaluate(() => {
       Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t) => { window.copied = t; } } });
     });
-    await page.click('.navbar [data-share]');
-    await page.waitForFunction(() => window.copied === 'https://radmagelabs.com/d2looter/');
-    assert.equal(await page.textContent('#toast'), 'Link copied: https://radmagelabs.com/d2looter/');
-    assert.deepEqual(problems, []);
+    await p.click('.navbar [data-share]');
+    await p.waitForFunction(() => window.copied === 'https://radmagelabs.com/d2looter/');
+    assert.equal(await p.textContent('#toast'), 'Link copied: https://radmagelabs.com/d2looter/');
+    assert.deepEqual(pr, []);
+    await c.close();
   });
 
   await check(engine, 'the page can read only from its own site (Content-Security-Policy)', async () => {
