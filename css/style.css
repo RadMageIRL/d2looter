@@ -169,8 +169,16 @@ p { margin: 6px 0 10px; }
 .top-controls { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .top-controls label { font-size: 12px; color: var(--muted); }
 
-.tabs { display: flex; gap: 2px; padding: 0 var(--gutter); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; background: var(--bg-2); }
+/* The section tabs, and share, feedback and coffee at the right end; on narrow screens those wrap
+   to their own line under the tabs. */
+.navbar { display: flex; flex-wrap: wrap; align-items: center; column-gap: 24px; padding: 0 var(--gutter); border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.tabs { flex: 1 1 auto; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
+.navlinks { line-height: 24px; padding: 4px 0; white-space: nowrap; }
+.navlinks a, .navlinks .link-button { display: inline-block; min-width: 24px; padding: 0 2px; text-align: center; }
+.link-button { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.tagline .link-button { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.tagline .link-button:hover { color: var(--accent); }
 .tabs a {
   padding: 10px 14px; min-height: 40px; text-decoration: none; color: var(--muted); white-space: nowrap;
   border-bottom: 2px solid transparent; margin-bottom: -1px;
@@ -181,6 +189,34 @@ p { margin: 6px 0 10px; }
 main { flex: 1; width: 100%; max-width: 1200px; margin: 0 auto; padding: 18px var(--gutter) 40px; }
 .view-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .view-head p { margin: 2px 0 0; }
+
+/* ---- Diablo II news ----
+   A closed bar by default; the summary row is the whole bar. */
+.news { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); margin: 0 0 16px; }
+.news > summary {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; padding: 10px 16px; cursor: pointer; list-style: none; border-radius: var(--radius);
+}
+.news > summary::-webkit-details-marker { display: none; }
+.news > summary::before {
+  content: ""; align-self: center; width: 6px; height: 6px; margin: 0 4px 0 2px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+}
+.news[open] > summary::before { transform: rotate(45deg); }
+.news > summary:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.news-title { font-family: var(--head-font); font-weight: 700; color: var(--accent); }
+.news-from { font-size: 12.5px; }
+.news-action { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+.news-action::after { content: "Show"; }
+.news[open] .news-action::after { content: "Hide"; }
+.news-body { padding: 0 16px 12px; }
+.news-note { margin: 2px 0 8px; color: var(--muted); font-size: 12.5px; }
+.news-list { list-style: none; margin: 0; padding: 0; max-width: 760px; }
+.news-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 2px 14px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.news-list li:first-child { border-top: 0; }
+.news-list a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+.news-list a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.news-list time { flex-shrink: 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.news-all { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 
 .banner { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius); padding: 10px 14px; margin: 0 0 14px; font-size: 14px; }
 .banner.warn { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
@@ -317,6 +353,9 @@ table.grid button.link:hover { text-decoration: underline; }
 .footer { border-top: 1px solid var(--line); padding: 16px var(--gutter) 22px; color: var(--muted); font-size: 13px; background: var(--bg-2); }
 .footer-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .footer a { color: var(--accent); }
+/* Each link and Share are at least 24px tall, so they are easy to tap. */
+.footer-links { flex-basis: 100%; line-height: 24px; }
+.footer-links a, .footer-links .link-button { display: inline-block; padding: 0 2px; }
 
 dialog.panel { margin: auto; max-width: min(460px, calc(100% - 32px)); }
 dialog::backdrop { background: rgba(0, 0, 0, .55); }
@@ -331,7 +370,12 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   .top-controls .select { flex: 1; min-width: 0; }
   .top-controls label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .result-big .big { font-size: 28px; }
+  .news > summary { padding: 9px 12px; }
+  .news-action { display: none; }
+  .news-body { padding: 0 12px 12px; }
+  .news-list li { flex-direction: column; gap: 2px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .card, .button, .chip { transition: border-color .12s, background-color .12s, color .12s; }
+  .news > summary::before { transition: transform .15s; }
 }

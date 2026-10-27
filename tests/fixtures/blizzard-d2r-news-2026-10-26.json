@@ -1,0 +1,235 @@
+{
+  "contentItems": [
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Diablo V: Forging the Next Era",
+        "cxpProduct": {
+          "segment": "diablo-4",
+          "title": "Diablo IV"
+        },
+        "category": "Recap",
+        "lastUpdated": "2026-09-12T21:20:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24297204/diablo-v-forging-the-next-era",
+        "newsId": "24297204"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Diablo\u2019s Next Era Revealed at BlizzCon 2026: Opening Ceremonies Recap",
+        "cxpProduct": {
+          "segment": "diablo-4",
+          "title": "Diablo IV"
+        },
+        "category": "Recap",
+        "lastUpdated": "2026-09-12T18:21:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24301509/diablos-next-era-revealed-at-blizzcon-2026-opening-ceremonies-recap",
+        "newsId": "24301509"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Diablo V is Coming Spring 2029",
+        "cxpProduct": {
+          "segment": "diablo-4",
+          "title": "Diablo IV"
+        },
+        "category": "News",
+        "lastUpdated": "2026-09-12T18:20:45Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24297203/diablo-v-is-coming-spring-2029",
+        "newsId": "24297203"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Your Preview Guide to Diablo at BlizzCon 2026",
+        "cxpProduct": {
+          "segment": "diablo-4",
+          "title": "Diablo IV"
+        },
+        "category": "Guide",
+        "lastUpdated": "2026-09-08T17:33:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24293056/your-preview-guide-to-diablo-at-blizzcon-2026",
+        "newsId": "24293056"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Diablo II: Resurrected Ladder Season 15 Now Live",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "News",
+        "lastUpdated": "2026-08-07T17:00:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24296140/diablo-ii-resurrected-ladder-season-15-now-live",
+        "newsId": "24296140"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Hardcore Level 99 Race: The Grimoire of the Unfallen \u2014 300 Champions",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "News",
+        "lastUpdated": "2026-06-16T17:00:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24285074/hardcore-level-99-race-the-grimoire-of-the-unfallen-300-champions",
+        "newsId": "24285074"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Diablo II: Resurrected Ladder Season 14 Has Concluded",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "Coming Soon",
+        "lastUpdated": "2026-05-08T17:00:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24261478/diablo-ii-resurrected-ladder-season-14-has-concluded",
+        "newsId": "24261478"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Diablo II: Resurrected PTR 3.2 Now Live",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "News",
+        "lastUpdated": "2026-04-10T17:00:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24266710/diablo-ii-resurrected-ptr-3-2-now-live",
+        "newsId": "24266710"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Reign of the Warlock - 3.1.2 Patch Notes",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "News",
+        "lastUpdated": "2026-04-01T18:50:33Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24271875/reign-of-the-warlock-3-1-2-patch-notes",
+        "newsId": "24271875"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Enter the Warlock Hardcore 99 Race",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "News",
+        "lastUpdated": "2026-02-20T18:15:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24263998/enter-the-warlock-hardcore-99-race",
+        "newsId": "24263998"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Reign of the Warlock - 3.1.1 Patch Notes",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "News",
+        "lastUpdated": "2026-02-19T22:45:49Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24244884/reign-of-the-warlock-3-1-1-patch-notes",
+        "newsId": "24244884"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Rain Annihilation in Reign of the Warlock",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "Announcement",
+        "lastUpdated": "2026-02-11T23:00:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24243863/rain-annihilation-in-reign-of-the-warlock",
+        "newsId": "24243863"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "Diablo II: Resurrected Ladder Season 13 Has Concluded",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "Game Update",
+        "lastUpdated": "2026-02-06T18:00:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24246296/diablo-ii-resurrected-ladder-season-13-has-concluded",
+        "newsId": "24246296"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "22 Nights of Terror Holiday Event",
+        "cxpProduct": {
+          "segment": "diablo-2-resurrected",
+          "title": "Diablo II: Resurrected"
+        },
+        "category": "Limited-Time Event",
+        "lastUpdated": "2025-12-09T18:00:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24250349/22-nights-of-terror-holiday-event",
+        "newsId": "24250349"
+      }
+    },
+    {
+      "contentType": "blogs",
+      "properties": {
+        "title": "BLIZZCON 2026 SOLD OUT!",
+        "cxpProduct": {
+          "segment": "blizzard",
+          "title": "Blizzard"
+        },
+        "category": "News",
+        "lastUpdated": "2025-11-05T17:01:00Z",
+        "newsUrl": "https://news.blizzard.com/en-us/article/24245211/blizzcon-2026-sold-out",
+        "newsId": "24245211"
+      }
+    }
+  ],
+  "context": {
+    "locale": "en-us",
+    "feedProductScope": "REQUEST",
+    "cxpProductId": "diablo-2-resurrected",
+    "feedFreshness": "ALL",
+    "feedStrategy": "TRUNCATE",
+    "feedContentTypes": [
+      "blogs",
+      "articles",
+      "patchNotes"
+    ],
+    "layoutTemplateId": "bltf4e8f6e2d0bff8fa",
+    "region": "Global excluding China"
+  },
+  "pagination": {
+    "offset": 0,
+    "limit": 15,
+    "feedOffset": 0,
+    "feedLimit": 15,
+    "hasNextPage": true
+  }
+}

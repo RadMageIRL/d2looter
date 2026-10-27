@@ -965,6 +965,111 @@ test('storage: missing, broken and unavailable storage never throw, and a broken
 });
 
 // ---------------------------------------------------------------------------------------------
+// Diablo II news, share and feedback
+// ---------------------------------------------------------------------------------------------
+// js/core/news.js reads Blizzard's D2R news list for the page and checks the headlines it keeps in
+// the browser. tests/fixtures/blizzard-d2r-news-2026-10-26.json is one page of that list as Blizzard
+// served it on 2026-10-26, cut down to the fields the app reads: four Diablo IV posts Blizzard
+// features on the D2R page, ten D2R posts and one Blizzard-wide post.
+const News = require('../js/core/news.js');
+const repoFile = (path) => readFileSync(join(ROOT, path), 'utf8');
+const ART = 'https://news.blizzard.com/en-us/article/';
+const post = (title, newsUrl, lastUpdated, segment = 'diablo-2-resurrected') => ({ contentType: 'blogs', properties: { title, newsUrl, lastUpdated, cxpProduct: { segment } } });
+test("news: Blizzard's list gives its newest D2R posts first, as text, leaving out other games' posts", () => {
+  const list = fixture('blizzard-d2r-news-2026-10-26.json');
+  assert.deepEqual(News.parseFeed(list).map((i) => [i.title, i.date]), [
+    ['Diablo II: Resurrected Ladder Season 15 Now Live', '2026-08-07T17:00:00.000Z'],
+    ['Hardcore Level 99 Race: The Grimoire of the Unfallen - 300 Champions', '2026-06-16T17:00:00.000Z'],
+    ['Diablo II: Resurrected Ladder Season 14 Has Concluded', '2026-05-08T17:00:00.000Z'],
+    ['Diablo II: Resurrected PTR 3.2 Now Live', '2026-04-10T17:00:00.000Z'],
+    ['Reign of the Warlock - 3.1.2 Patch Notes', '2026-04-01T18:50:33.000Z'],
+    ['Enter the Warlock Hardcore 99 Race', '2026-02-20T18:15:00.000Z'],
+  ]);
+  assert.equal(News.parseFeed(list)[0].link, ART + '24296140/diablo-ii-resurrected-ladder-season-15-now-live');
+  assert.equal(News.parseFeed(list, 20).length, 10, 'ten of the fifteen posts are D2R posts');
+  // Odd entries: other games, other sites, scripts, repeats, markup, no title, no date, no product.
+  const odd = { contentItems: [
+    post('Diablo V is Coming Spring 2029', ART + '24297203/diablo-v', '2026-09-12T18:20:45Z', 'diablo-4'),
+    post('Somewhere else', 'https://example.com/news', '2026-09-01T00:00:00Z'),
+    post('A script', 'javascript:alert(1)', '2026-09-01T00:00:00Z'),
+    post('Season 15', ART + '1/season-15', '2026-08-07T17:00:00Z'),
+    post('The same link again', ART + '1/season-15#top', '2026-09-02T00:00:00Z'),
+    post('<b>Patch</b> &amp; notes \u2014 3.3', ART + '2/patch-notes?utm=x', '2026-04-01T18:50:33Z'),
+    post('No date', ART + '3/no-date'),
+    post('   ', ART + '4/untitled', '2026-09-03T00:00:00Z'),
+    post('A date that cannot be read', ART + '5/bad-date', 'soon'),
+    post('Plain http', 'http://news.blizzard.com/en-us/article/6/http', '2026-09-04T00:00:00Z'),
+    post('Another language', 'https://news.blizzard.com/de-de/article/7/de', '2026-09-05T00:00:00Z'),
+    { contentType: 'blogs', properties: { title: 'No product', newsUrl: ART + '8/x', lastUpdated: '2026-09-06T00:00:00Z' } },
+    null, 'x', { properties: null },
+  ] };
+  assert.deepEqual(News.parseFeed(odd), [
+    { title: 'Season 15', link: ART + '1/season-15', date: '2026-08-07T17:00:00.000Z' },
+    { title: 'Patch & notes - 3.3', link: ART + '2/patch-notes', date: '2026-04-01T18:50:33.000Z' },
+    { title: 'No date', link: ART + '3/no-date', date: null },
+    { title: 'A date that cannot be read', link: ART + '5/bad-date', date: null },
+  ]);
+  // A list that isn't there is an error, never "no news".
+  for (const bad of [null, [], 'news', {}, { contentItems: 'x' }]) assert.throws(() => News.parseFeed(bad), /expected shape/, JSON.stringify(bad));
+  assert.deepEqual(News.parseFeed({ contentItems: [] }), []);
+});
+test('news: a link is kept only as https to an English page of news.blizzard.com, and a date only when it can be read', () => {
+  assert.equal(News.cleanLink('https://news.blizzard.com/en-us/article/1/x?a=1#top'), 'https://news.blizzard.com/en-us/article/1/x');
+  for (const bad of ['http://news.blizzard.com/en-us/article/1/x', 'https://news.blizzard.com/de-de/article/1/x', 'https://news.blizzard.com.example.com/en-us/x',
+    'https://evil.example/news.blizzard.com/en-us/x', 'ftp://news.blizzard.com/en-us/x', 'https://user@news.blizzard.com/en-us/x', 'https://news.blizzard.com:8443/en-us/x',
+    'https://blizzard.com/en-us/x', 'javascript:alert(1)', '', 5, null]) {
+    assert.equal(News.cleanLink(bad), null, String(bad));
+  }
+  assert.equal(News.cleanDate('2026-08-07T17:00:00Z'), '2026-08-07T17:00:00.000Z');
+  assert.equal(News.cleanDate('soon'), null);
+  assert.equal(News.cleanDate(5), null);
+  assert.equal(News.text('A \u2014 B \u2013 C\u00a0 <i>D</i> &#8212; E'), 'A - B - C D - E');
+});
+test('news: headlines kept in this browser are used only while they still look like what parseFeed makes, and only for 15 minutes', () => {
+  const good = { title: 'Diablo II: Resurrected PTR 3.2 Now Live', link: ART + '24266710/diablo-ii-resurrected-ptr-3-2-now-live', date: '2026-04-10T17:00:00.000Z' };
+  const at = Date.parse('2026-10-26T20:00:00Z');
+  assert.deepEqual(News.sanitizeCache({ fetchedAt: at, items: [good, { title: 'x', link: 'https://example.com/' }, { title: 5, link: good.link }, null, { ...good, title: '<b>Bold</b> &#8212; x' }, { ...good, date: 'soon' }] }),
+    { fetchedAt: at, items: [good, { ...good, title: 'Bold - x' }, { ...good, date: null }] });
+  assert.equal(News.sanitizeCache({ fetchedAt: at, items: Array(20).fill(good) }).items.length, News.MAX);
+  for (const bad of [null, [], 'news', {}, { fetchedAt: at }, { fetchedAt: 'today', items: [good] }, { fetchedAt: NaN, items: [good] }, { fetchedAt: at, items: [] },
+    { fetchedAt: at, items: [{ title: 'x', link: 'javascript:alert(1)' }] }]) {
+    assert.equal(News.sanitizeCache(bad), null, JSON.stringify(bad));
+  }
+  const cache = { fetchedAt: at, items: [good] };
+  assert.equal(News.isFresh(cache, at), true);
+  assert.equal(News.isFresh(cache, at + 15 * 60000 - 1), true);
+  assert.equal(News.isFresh(cache, at + 15 * 60000), false);
+  assert.equal(News.isFresh(cache, at - 1), false, 'a clock set back');
+  assert.equal(News.isFresh(null, at), false);
+});
+test('news: the list comes from Blizzard through radmagelabs.com, and the repo has no news.json of its own', () => {
+  // radmagelabs.com answers /d2looter/news.json with FEED (a rewrite in its vercel.json). A file
+  // here would only be served, and go stale, on GitHub Pages, where the panel should instead say
+  // where headlines load.
+  assert.equal(News.FEED, 'https://news.blizzard.com/en-us/api/feed/diablo-2-resurrected');
+  assert.ok(!existsSync(join(ROOT, 'news.json')), 'no news.json in the repo');
+});
+test("news: the panel starts closed, links to all of Blizzard's D2R news, and the README says what is asked for", () => {
+  const html = repoFile('index.html');
+  assert.match(html, /<details class="news" id="news" hidden>/);
+  assert.doesNotMatch(html, /<details class="news"[^>]* open/);
+  assert.ok(html.includes(`<a href="${News.PAGE}" target="_blank" rel="noopener">View all news</a>`));
+  assert.ok(html.includes('<script src="js/core/news.js?v='));
+  assert.match(repoFile('README.md').replace(/\s+/g, ' '), /nothing is sent anywhere\. The only thing it asks for is the news headlines, from this same site, and only while the news panel is open; radmagelabs\.com passes that request on to Blizzard News\./);
+});
+test('the header and footer have Share and link to the Issues page and Buy Me a Coffee in a new tab, and the footer to the source', () => {
+  const html = repoFile('index.html');
+  const links = (href) => html.split(`<a href="${href}" target="_blank" rel="noopener"`).length - 1;
+  assert.equal(links('https://github.com/RadMageIRL/d2looter'), 1);
+  assert.equal(links('https://github.com/RadMageIRL/d2looter/issues'), 2);
+  assert.equal(links('https://buymeacoffee.com/radmageirl'), 2);
+  assert.equal(html.split(' data-share').length - 1, 2);
+  // Share passes the canonical address, and the tagline keeps its RadMage Labs link.
+  assert.ok(html.includes('<link rel="canonical" href="https://radmagelabs.com/d2looter/">'));
+  assert.match(html, /<span class="tagline">v[\d.]+ · <a href="https:\/\/radmagelabs\.com\/">RadMage Labs<\/a><\/span>/);
+});
+
+// ---------------------------------------------------------------------------------------------
 // House rules on everything committed
 // ---------------------------------------------------------------------------------------------
 test('index.html: the Content-Security-Policy hash matches the inline script, and there is no other inline script', async () => {
@@ -975,9 +1080,12 @@ test('index.html: the Content-Security-Policy hash matches the inline script, an
   const hash = 'sha256-' + createHash('sha256').update(inline[0]).digest('base64');
   const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
   assert.ok(csp.includes(`'${hash}'`), `${hash} not in the policy`);
-  assert.match(csp, /connect-src 'none'/);
+  // The page may read from its own site (news.json) and nowhere else.
+  assert.match(csp, /connect-src 'self';/);
   assert.ok(!/https?:/.test(csp), 'no outside sources allowed');
   assert.ok(!/ on[a-z]+="/i.test(html), 'no inline event handlers');
+  const app = readFileSync(join(ROOT, 'js', 'app.js'), 'utf8');
+  assert.deepEqual([...app.matchAll(/\bfetch\(([^,)]*)/g)].map((m) => m[1]), ["'news.json'"], 'the only thing fetched is news.json');
 });
 test('release metadata: one version on every asset, canonical and preview tags, the trailing-slash guard', () => {
   const html = readFileSync(join(ROOT, 'index.html'), 'utf8');

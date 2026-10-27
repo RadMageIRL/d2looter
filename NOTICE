@@ -67,5 +67,13 @@ Patch facts
   The current ladder season (15) and the patch 3.3 changes used to check the data come from the
   Blizzard News article "Diablo II: Resurrected Ladder Season 15 Now Live".
 
+News headlines
+  The news panel shows titles, dates and links from Blizzard News, the list behind
+  https://news.blizzard.com/en-us/feed/diablo-2-resurrected , read when the panel is opened. Only
+  the headline, its date and a link to the article on Blizzard's site are shown; no article text
+  or images. tests/fixtures/blizzard-d2r-news-2026-10-26.json is one page of that list, cut down to
+  titles, products, categories, dates and links, for the tests. The titles remain Blizzard's and
+  are NOT covered by this project's MIT license.
+
 Icons
   The gem mark (favicon.svg) is original to this project. No game images are used.

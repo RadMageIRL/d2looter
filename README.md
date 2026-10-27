@@ -2,11 +2,13 @@
 
 A loot and farming companion for Diablo II: Lord of Destruction 1.14d and Diablo II: Resurrected.
 Item search, drop chances worked out from the game's own treasure classes, an odds calculator,
-a Holy Grail tracker, Magic Find, and a rune and runeword reference. It runs entirely in the
-browser: no account, no ads, no analytics, and nothing is sent anywhere.
+a Holy Grail tracker, Magic Find, a rune and runeword reference, and the latest Diablo II news. It
+runs entirely in the browser: no account, no ads, no analytics, and nothing is sent anywhere. The
+only thing it asks for is the news headlines, from this same site, and only while the news panel is
+open; radmagelabs.com passes that request on to Blizzard News.
 
 **Use it at [radmagelabs.com/d2looter](https://radmagelabs.com/d2looter/)** (also at
-[radmageirl.github.io/d2looter](https://radmageirl.github.io/d2looter/)). This is v0.1.0.
+[radmageirl.github.io/d2looter](https://radmageirl.github.io/d2looter/)). This is v0.2.0.
 
 ## Run it locally
 
@@ -39,7 +41,17 @@ then open http://127.0.0.1:8023/d2looter/.
   diminishing returns, and the quality chances for any base item at any item level.
 - **Runes and runewords.** Rune order and levels, every runeword with its runes, sockets, item
   types and ladder status, and a count of the runes you own to show what you can make.
+- **Diablo II news.** The newest headlines from Blizzard's Diablo II: Resurrected news, with their
+  dates and links to the articles, in a panel at the top of the item search. It starts closed and
+  remembers whether you left it open. Headlines load at radmagelabs.com/d2looter; elsewhere the
+  panel links to Blizzard's news page.
 - **Themes.** System, Light, Dark and Unique (black with the gold of unique item names).
+
+## Feedback
+
+To report a problem or suggest something, open an issue on
+[GitHub Issues](https://github.com/RadMageIRL/d2looter/issues). If you'd like to support future
+projects, you can [buy me a coffee](https://buymeacoffee.com/radmageirl).
 
 ## Game versions
 
@@ -89,9 +101,21 @@ node tools/verify-data.mjs  # compare the tables with Silospen's independent cop
 `tools/sources.json` pins every input file by commit and SHA-256. See NOTICE for sources and
 licenses.
 
+### News
+
+Blizzard's [Diablo II: Resurrected news page](https://news.blizzard.com/en-us/feed/diablo-2-resurrected)
+loads its list of posts as JSON, which pages on other sites aren't allowed to read. So
+radmagelabs.com passes that list through at `/d2looter/news.json`, the same way D4 Tracker gets its
+news, and the news panel reads it from there. It keeps the six newest posts Blizzard tags as Diablo
+II: Resurrected (the list also carries Diablo IV and Blizzard-wide posts) and keeps them in the
+browser for 15 minutes. On GitHub Pages, or opened from a file, nothing passes the list through, so
+the panel says where headlines load and links to Blizzard's page. `node tools/serve.mjs` passes the
+list through the same way, so the panel works there too.
+
 ## License
 
 MIT for the code (see LICENSE). The game data in `js/data/` (item names, properties, text and
-drop-table numbers) comes from Blizzard's games and is not covered by the MIT license; see NOTICE.
+drop-table numbers) comes from Blizzard's games and is not covered by the MIT license, nor are the
+news headlines from Blizzard News; see NOTICE.
 Diablo II and Diablo II: Resurrected are trademarks of Blizzard Entertainment; D2Looter is a free
 fan tool and is not affiliated with Blizzard. Part of [RadMage Labs](https://radmagelabs.com/).

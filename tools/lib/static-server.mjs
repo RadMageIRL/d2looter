@@ -4,6 +4,8 @@
 // mounts: [{ prefix: '/d2looter/', dir }]
 // slash:  'redirect' answers "/d2looter" with a 301 to "/d2looter/" (as GitHub Pages does);
 //         'none' serves the page at the bare path, the worst case.
+// routes: { '/d2looter/news.json': async () => ({ status, type, body }) } answers those paths
+//         itself, as radmagelabs.com's rewrite does for the news list.
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
@@ -13,9 +15,9 @@ const TYPES = {
   '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain',
 };
 
-export function serve({ mounts, slash = 'redirect', port = 0 }) {
+export function serve({ mounts, slash = 'redirect', port = 0, routes = {} }) {
   const requests = [];
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     const path = decodeURIComponent(url.pathname);
     const send = (status, body, type = 'text/plain', headers = {}) => {
@@ -23,6 +25,9 @@ export function serve({ mounts, slash = 'redirect', port = 0 }) {
       res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', ...headers });
       res.end(body);
     };
+    if (routes[path]) {
+      try { const r = await routes[path](); return send(r.status, r.body, r.type); } catch (e) { return send(502, String(e.message)); }
+    }
     const mount = mounts.find((m) => path.startsWith(m.prefix) || path === m.prefix.slice(0, -1));
     if (!mount) return send(404, 'outside every base path');
     if (path === mount.prefix.slice(0, -1)) {

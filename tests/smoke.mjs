@@ -4,8 +4,9 @@
 // The app is opened over http from a local server that refuses anything outside /d2looter/, and
 // straight from the file (file://), the way launch.cmd opens it.
 import assert from 'node:assert/strict';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { findChrome, launchChrome } from './lib/cdp.mjs';
 import { serve } from '../tools/lib/static-server.mjs';
@@ -23,7 +24,12 @@ async function test(name, fn) {
 const VISIBLE = "(() => { const s = document.querySelector('main section:not([hidden])'); return s && s.children.length > 0 && s.id; })()";
 const text = (sel) => `(document.querySelector(${JSON.stringify(sel)}) || {}).textContent || ''`;
 
-const server = await serve({ mounts: [{ prefix: '/d2looter/', dir: ROOT }] });
+// The news list as radmagelabs.com would pass it through, from a saved page of Blizzard's list.
+const News = createRequire(import.meta.url)('../js/core/news.js');
+const NEWS_FILE = join(ROOT, 'tests', 'fixtures', 'blizzard-d2r-news-2026-10-26.json');
+const NEWS_LIST = JSON.parse(readFileSync(NEWS_FILE, 'utf8'));
+const routes = { '/d2looter/news.json': async () => ({ status: 200, type: 'application/json', body: readFileSync(NEWS_FILE) }) };
+const server = await serve({ mounts: [{ prefix: '/d2looter/', dir: ROOT }], routes });
 const base = `${server.origin}/d2looter/`;
 const chrome = await launchChrome();
 try {
@@ -169,14 +175,151 @@ try {
     clean();
   });
 
-  await test('phone width: no sideways scrolling on any view', async () => {
+  // The news panel: closed and silent until opened, then Blizzard's D2R headlines. This test server
+  // answers /d2looter/news.json with a saved page of Blizzard's list, as radmagelabs.com answers it
+  // with the live one. Only the item search shows the panel.
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const asked = () => page.requests.filter((u) => /\/d2looter\/news\.json$/.test(u)).length;
+  const settingsNow = async () => JSON.parse(await page.eval("localStorage.getItem('d2looter:v1:settings') || '{}'"));
+  const freshItems = async (settings) => {
+    await go('#items');
+    await sleep(300); // let a pending settings save land first
+    const set = settings ? `localStorage.setItem('d2looter:v1:settings', ${JSON.stringify(JSON.stringify(settings))})` : "localStorage.removeItem('d2looter:v1:settings')";
+    await page.eval(`(() => { localStorage.removeItem('d2looter:v1:news'); ${set}; })()`);
+    await page.reload();
+    await page.waitFor(VISIBLE);
+  };
+  await test("the news panel starts closed on the item search, asks for nothing until opened, then shows Blizzard's D2R headlines, keeps them 15 minutes and remembers it was open", async () => {
+    await freshItems(null);
+    const before = asked();
+    await sleep(500);
+    assert.deepEqual(await page.eval("(() => { const n = document.getElementById('news'); return [n.hidden, n.open]; })()"), [false, false], 'shown and closed');
+    assert.equal(asked(), before, 'nothing asked for while closed');
+    await page.eval("document.getElementById('news').open = true");
+    await page.waitFor("document.querySelectorAll('#news-list li').length > 0");
+    assert.equal(asked(), before + 1);
+    const shown = await page.eval(`[...document.querySelectorAll('#news-list li')].map((li) => { const a = li.querySelector('a'), t = li.querySelector('time');
+      return { link: a.href, title: a.textContent, target: a.target, rel: a.rel, date: t && t.getAttribute('datetime'), text: t && t.textContent }; })`);
+    assert.deepEqual(shown.map((s) => [s.title, s.link, s.date]), News.parseFeed(NEWS_LIST).map((a) => [a.title, a.link, a.date]), 'the D2R posts, newest first');
+    for (const s of shown) {
+      assert.ok(s.link.startsWith('https://news.blizzard.com/en-us/') && s.target === '_blank' && /noopener/.test(s.rel), s.link);
+      assert.match(s.text, /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+    }
+    assert.match(await page.eval(text('#news-note')), /^Headlines from Blizzard News, checked at \d{1,2}:\d{2}\s[AP]M\.$/);
+    assert.equal(await page.eval("document.querySelector('.news-all a').href"), 'https://news.blizzard.com/en-us/feed/diablo-2-resurrected');
+    const kept = JSON.parse(await page.eval("localStorage.getItem('d2looter:v1:news')"));
+    assert.ok(Number.isFinite(kept.fetchedAt) && kept.items.length === shown.length, 'kept in this browser');
+    await sleep(300);
+    assert.equal((await settingsNow()).newsOpen, true, 'saved as open');
+    // A reload opens it again with the kept headlines, without asking again.
+    await page.reload();
+    await page.waitFor(VISIBLE);
+    await page.waitFor("document.getElementById('news').open && document.querySelectorAll('#news-list li').length > 0");
+    assert.equal(asked(), before + 1);
+    // Other views hide it, and coming back within 15 minutes asks for nothing.
+    await go('#calc');
+    assert.equal(await page.eval("document.getElementById('news').hidden"), true);
+    await go('#items');
+    assert.equal(await page.eval("document.getElementById('news').hidden"), false);
+    assert.equal(asked(), before + 1);
+    await page.eval("document.getElementById('news').open = false");
+    await sleep(400);
+    assert.equal((await settingsNow()).newsOpen, false, 'saved as closed');
+    clean();
+    await snap('items-news');
+  });
+
+  await test('the news panel says when the headlines could not load, when there are no D2R posts and where they load, and keeps the old ones when an update fails', async () => {
+    await freshItems({ newsOpen: false });
+    // A clock that can jump past the 15 minutes headlines are kept, and a fetch that can be swapped.
+    await page.eval("(() => { const real = Date.now, realFetch = window.fetch; window.__later = 0; Date.now = () => real() + window.__later; window.__realFetch = realFetch; })()");
+    const reopen = async (fetchSource, keepHeadlines) => {
+      await page.eval("document.getElementById('news').open = false");
+      await sleep(100);
+      await page.eval(`(() => { window.__later += 16 * 60000; ${keepHeadlines ? '' : "localStorage.removeItem('d2looter:v1:news');"} const f = ${fetchSource}; window.__calls = 0;
+        window.fetch = (...a) => { window.__calls++; return f(...a); }; document.getElementById('news').open = true; })()`);
+      await page.waitFor("window.__calls === 1 && document.getElementById('news-body').getAttribute('aria-busy') === 'false'");
+      return page.eval("({ note: document.getElementById('news-note').textContent, items: document.querySelectorAll('#news-list li').length, listHidden: document.getElementById('news-list').hidden })");
+    };
+    const answer = (status, type, body) => `() => Promise.resolve(new Response(${JSON.stringify(body)}, { status: ${status}, headers: { 'content-type': '${type}' } }))`;
+    let r = await reopen("() => Promise.reject(new TypeError('offline'))");
+    assert.match(r.note, /could not load right now/); assert.equal(r.items, 0); assert.ok(r.listHidden);
+    r = await reopen(answer(404, 'application/json', '{"error":"not found"}'));
+    assert.match(r.note, /could not load right now/, "Blizzard's own not found, in JSON");
+    r = await reopen(answer(200, 'application/json', '{"error":"gone"}'));
+    assert.match(r.note, /could not load right now/, 'a list in another shape');
+    r = await reopen(answer(502, 'text/plain', 'bad gateway'));
+    assert.match(r.note, /could not load right now/, 'HTTP 502');
+    const d4only = { contentItems: [{ contentType: 'blogs', properties: { title: 'Diablo V is Coming Spring 2029', newsUrl: 'https://news.blizzard.com/en-us/article/24297203/x', lastUpdated: '2026-09-12T18:20:45Z', cxpProduct: { segment: 'diablo-4' } } }] };
+    r = await reopen(answer(200, 'application/json', JSON.stringify(d4only)));
+    assert.match(r.note, /no Diablo II: Resurrected posts in its latest list/); assert.equal(r.items, 0);
+    r = await reopen('window.__realFetch');
+    assert.match(r.note, /^Headlines from Blizzard News, checked /); assert.equal(r.items, News.parseFeed(NEWS_LIST).length);
+    r = await reopen("() => Promise.reject(new TypeError('offline'))", true);
+    assert.match(r.note, /could not be reached just now; these headlines were checked /); assert.equal(r.items, News.parseFeed(NEWS_LIST).length, 'the kept headlines stay');
+    // A 404 page means this address doesn't pass the list through (GitHub Pages): say where headlines load, and don't ask again.
+    r = await reopen(answer(404, 'text/html', '<h1>404</h1>'));
+    assert.match(r.note, /^Headlines load at radmagelabs\.com\/d2looter\/\.$/); assert.equal(r.items, 0);
+    assert.equal(await page.eval("document.querySelector('#news-note a').href"), 'https://radmagelabs.com/d2looter/');
+    await page.eval("document.getElementById('news').open = false"); await sleep(100);
+    await page.eval("(() => { window.__later += 16 * 60000; window.__calls = 0; document.getElementById('news').open = true; })()"); await sleep(400);
+    assert.equal(await page.eval('window.__calls'), 0, 'not asked again where nothing answers');
+    assert.equal(await page.eval("document.querySelector('.news-all a').href"), 'https://news.blizzard.com/en-us/feed/diablo-2-resurrected');
+    await page.eval("document.getElementById('news').open = false");
+    await sleep(300);
+    await page.reload();
+    await page.waitFor(VISIBLE);
+    clean();
+  });
+  await test('Share passes https://radmagelabs.com/d2looter/ to the share sheet, or copies it where there is none', async () => {
+    const canonical = 'https://radmagelabs.com/d2looter/';
+    const r = await page.eval(`(async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const set = (name, value) => Object.defineProperty(navigator, name, { configurable: true, value });
+      const toast = () => { const t = document.getElementById('toast'); return t.hidden ? '' : t.textContent; };
+      const out = { shared: [] };
+      let copied = null;
+      set('share', async (d) => { out.shared.push(d.url + ' | ' + d.title); });
+      for (const b of document.querySelectorAll('.navbar [data-share], .footer [data-share]')) { b.click(); await sleep(100); }
+      set('clipboard', { writeText: async (t) => { copied = t; } });
+      set('share', async () => { throw new DOMException('closed', 'AbortError'); });
+      document.querySelector('.navbar [data-share]').click(); await sleep(100);
+      out.afterClosedSheet = copied;
+      set('share', async () => { throw new DOMException('blocked', 'NotAllowedError'); });
+      document.querySelector('.navbar [data-share]').click(); await sleep(100);
+      out.afterFailedSheet = copied; copied = null;
+      set('share', undefined);
+      document.querySelector('.footer [data-share]').click(); await sleep(100);
+      out.withoutSheet = copied; out.toastCopied = toast();
+      set('clipboard', { writeText: async () => { throw new DOMException('denied', 'NotAllowedError'); } });
+      document.querySelector('.footer [data-share]').click(); await sleep(100);
+      out.toastManual = toast();
+      return out;
+    })()`);
+    const title = 'D2Looter: Diablo II Drop Calculator, Item Search & Holy Grail';
+    assert.deepEqual(r.shared, [`${canonical} | ${title}`, `${canonical} | ${title}`], 'header and footer Share');
+    assert.equal(r.afterClosedSheet, null, 'closing the sheet copies nothing');
+    assert.equal(r.afterFailedSheet, canonical, 'a failed sheet copies the link');
+    assert.equal(r.withoutSheet, canonical);
+    assert.equal(r.toastCopied, 'Link copied: ' + canonical);
+    assert.equal(r.toastManual, 'Copy this link: ' + canonical);
+    await page.reload();
+    await page.waitFor(VISIBLE);
+    clean();
+  });
+
+  await test('phone width: no sideways scrolling on any view, with the news panel open', async () => {
     await page.viewport(390, 844, true);
+    await freshItems({ newsOpen: true });
     for (const v of ['#items', '#item/u:Harlequin Crest', '#calc', '#sim', '#grail', '#mf', '#runes', '#accuracy']) {
       await go(v);
+      if (v === '#items') await page.waitFor("document.querySelectorAll('#news-list li').length > 0");
       const w = await page.eval('document.documentElement.scrollWidth');
       assert.ok(w <= 390, `${v} is ${w}px wide`);
     }
     await snap('phone-calc');
+    await go('#items');
+    await snap('phone-items-news');
     await page.viewport(1280, 900);
     clean();
   });
@@ -198,6 +341,14 @@ try {
     const p2 = await chrome.newPage();
     await p2.goto(pathToFileURL(join(ROOT, 'index.html')).href + '#calc');
     await p2.waitFor("document.querySelector('.result-big .big')", 15000);
+    // From a file nothing passes the news through; the panel says where headlines load and keeps the link to Blizzard's page.
+    await p2.eval("location.hash = '#items'");
+    await p2.waitFor("!document.getElementById('news').hidden");
+    await p2.eval("document.getElementById('news').open = true");
+    await p2.waitFor("document.getElementById('news-note').textContent === 'Headlines load at radmagelabs.com/d2looter/.'");
+    assert.equal(await p2.eval("document.getElementById('news-list').hidden"), true);
+    assert.equal(await p2.eval("document.querySelector('.news-all a').href"), 'https://news.blizzard.com/en-us/feed/diablo-2-resurrected');
+    assert.ok(!p2.requests.some((u) => /news\.json/.test(u)), 'news.json is not requested from a file');
     assert.deepEqual(p2.problems, []);
   });
 } finally {

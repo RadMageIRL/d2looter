@@ -7,7 +7,7 @@
 // Without Playwright it prints SKIPPED and exits with code 2: a browser that did not run is never
 // counted as passing.
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -36,19 +36,29 @@ const results = {};
 let passed = 0, failed = 0;
 let step = ''; // the step a check is on, named in its failure
 
-const server = await serve({ mounts: [{ prefix: '/d2looter/', dir: ROOT }] });
+// The news list as radmagelabs.com would pass it through, from a saved page of Blizzard's list.
+const NEWS_FILE = join(ROOT, 'tests', 'fixtures', 'blizzard-d2r-news-2026-10-26.json');
+const routes = { '/d2looter/news.json': async () => ({ status: 200, type: 'application/json', body: readFileSync(NEWS_FILE) }) };
+const server = await serve({ mounts: [{ prefix: '/d2looter/', dir: ROOT }], routes });
 // --base https://radmagelabs.com/d2looter/ runs the same checks against a deployed copy.
 const base = arg('--base') || `${server.origin}/d2looter/`;
 const origin = new URL(base).origin;
+// GitHub Pages does not pass the news list through (radmagelabs.com and the test server do), so there
+// the panel says where headlines load, and its one news.json 404 is expected.
+const newsHere = !/\.github\.io$/.test(new URL(base).hostname);
+const newsShown = newsHere
+  ? () => document.querySelectorAll('#news-list li').length > 0
+  : () => document.getElementById('news-note').textContent === 'Headlines load at radmagelabs.com/d2looter/.';
+const expected404 = (url) => !newsHere && /\/d2looter\/news\.json$/.test(url);
 if (arg('--base')) console.log(`testing ${base}`);
 
 // Problems a page reports: errors, failed or outside requests.
 function watch(page) {
   const problems = [];
-  page.on('console', (m) => { if (m.type() === 'error') problems.push('console: ' + m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error' && !expected404(m.location().url || '')) problems.push('console: ' + m.text()); });
   page.on('pageerror', (e) => problems.push('pageerror: ' + e.message));
   page.on('requestfailed', (r) => { if (!/^blob:/.test(r.url())) problems.push('failed: ' + r.url() + ' ' + (r.failure() || {}).errorText); });
-  page.on('response', (r) => { if (r.status() >= 400) problems.push('HTTP ' + r.status() + ' ' + r.url()); });
+  page.on('response', (r) => { if (r.status() >= 400 && !(r.status() === 404 && expected404(r.url()))) problems.push('HTTP ' + r.status() + ' ' + r.url()); });
   page.on('request', (r) => { const u = r.url(); if (!u.startsWith(origin) && !u.startsWith('file:') && !u.startsWith('data:') && !u.startsWith('blob:')) problems.push('outside request: ' + u); });
   return problems;
 }
@@ -89,10 +99,15 @@ for (const engine of only) {
     const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, ...(size.mobile && engine !== 'firefox' ? { isMobile: true, hasTouch: true } : {}) });
     const page = await ctx.newPage();
     const problems = watch(page);
-    await check(engine, `${size.name}: every view loads cleanly and fits`, async () => {
+    await check(engine, `${size.name}: every view loads cleanly and fits, the item search with the news panel open`, async () => {
+      await page.goto(base + '#items');
+      await page.waitForFunction(VISIBLE, null, { timeout: 20000 });
+      await page.evaluate(() => localStorage.setItem('d2looter:v1:settings', JSON.stringify({ newsOpen: true })));
+      await page.reload();
       for (const v of VIEWS) {
         await page.goto(base + '#' + v);
         await page.waitForFunction(VISIBLE, null, { timeout: 20000 });
+        if (v === 'items') await page.waitForFunction(newsShown);
         await page.waitForTimeout(150);
         const layout = await page.evaluate(LAYOUT);
         assert.deepEqual(layout, [], `${v}`);
@@ -110,9 +125,10 @@ for (const engine of only) {
   await check(engine, 'themes: System, Light, Dark and Unique apply and are remembered', async () => {
     for (const theme of ['system', 'light', 'dark', 'unique']) {
       await page.goto(base + '#items');
-      await page.evaluate((t) => localStorage.setItem('d2looter:v1:settings', JSON.stringify({ theme: t })), theme);
+      await page.evaluate((t) => localStorage.setItem('d2looter:v1:settings', JSON.stringify({ theme: t, newsOpen: true })), theme);
       await page.reload();
       await page.waitForFunction(VISIBLE);
+      await page.waitForFunction(newsShown);
       const attr = await page.evaluate(() => document.documentElement.getAttribute('data-theme') || 'system');
       assert.equal(attr, theme);
       assert.match(await page.textContent('#theme'), new RegExp(theme, 'i'));
@@ -253,9 +269,37 @@ for (const engine of only) {
     assert.deepEqual(problems, []);
   });
 
-  await check(engine, 'the page cannot contact any server (Content-Security-Policy)', async () => {
+  await check(engine, 'news panel: closed until opened, the headlines link to Blizzard in a new tab, the keyboard toggles it; Share copies the address', async () => {
     await page.goto(base + '#items');
     await page.waitForFunction(VISIBLE);
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForFunction(VISIBLE);
+    assert.equal(await page.evaluate(() => document.getElementById('news').open), false);
+    await page.click('#news > summary');
+    await page.waitForFunction(newsShown);
+    const links = await page.$$eval('#news-list a', (as) => as.map((a) => [a.href, a.target, a.rel]));
+    assert.ok(links.length <= 6 && links.every(([h, t, r]) => h.startsWith('https://news.blizzard.com/en-us/') && t === '_blank' && /noopener/.test(r)), JSON.stringify(links));
+    assert.equal(links.length > 0, newsHere, newsHere ? 'headlines' : 'no headlines where the list is not passed through');
+    step = 'Enter on the summary closes it';
+    await page.focus('#news > summary');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('news').open);
+    step = 'Share without a share sheet';
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t) => { window.copied = t; } } });
+    });
+    await page.click('.navbar [data-share]');
+    await page.waitForFunction(() => window.copied === 'https://radmagelabs.com/d2looter/');
+    assert.equal(await page.textContent('#toast'), 'Link copied: https://radmagelabs.com/d2looter/');
+    assert.deepEqual(problems, []);
+  });
+
+  await check(engine, 'the page can read only from its own site (Content-Security-Policy)', async () => {
+    await page.goto(base + '#items');
+    await page.waitForFunction(VISIBLE);
+    if (newsHere) assert.equal(await page.evaluate(async () => (await fetch('news.json')).ok), true, 'news.json from its own site');
     const blocked = await page.evaluate(async () => {
       try { await fetch('https://example.com/'); return false; } catch (e) { return true; }
     });

@@ -11,7 +11,7 @@
   var PAGE = 60;
   // Matches the ?v= on every asset in index.html (tests/run.mjs checks), so a release reaches
   // browsers and hosts that cache files for a while.
-  var VERSION = '0.1.0';
+  var VERSION = '0.2.0';
 
   // ---------------------------------------------------------------------------------------------
   // helpers
@@ -63,6 +63,7 @@
     grail: { q: '', show: 'all', category: 'all' },
     mf: { mf: 300, item: 'b:uap', ilvl: 85 },
     runes: { q: '', sockets: 'all', makeable: false, hideLadder: false },
+    newsOpen: false,
   };
   function loadSettings() {
     var raw = Store.read('settings', {});
@@ -165,6 +166,112 @@
   });
 
   // ---------------------------------------------------------------------------------------------
+  // Diablo II news
+  // ---------------------------------------------------------------------------------------------
+  // The panel starts closed and asks for nothing until it is opened. Blizzard's news list can't be
+  // read from another site, so radmagelabs.com passes it through as news.json next to the page (see
+  // js/core/news.js). Headlines are kept in this browser for 15 minutes; an open panel asks again
+  // when it is shown after that, and a read that fails keeps the headlines already shown. Where
+  // nothing answers (GitHub Pages, a file opened from disk) the panel links to Blizzard News.
+  // Whether the panel is open is saved with the other settings.
+  var News = window.D2News;
+  var NEWS_TIMEOUT = 8000;
+  var news = { items: null, fetchedAt: null, status: 'idle', loading: false, checkedAt: -Infinity };
+  function newsDate(ms) { return new Date(ms).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+  // "at 8:15 PM" today, otherwise "Oct 25, 2026 at 8:15 PM".
+  function checkedWhen(ms) {
+    var at = 'at ' + new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return new Date(ms).toDateString() === new Date(Date.now()).toDateString() ? at : newsDate(ms) + ' ' + at;
+  }
+  function renderNews() {
+    var when = news.fetchedAt ? checkedWhen(news.fetchedAt) : '';
+    var notes = {
+      idle: ['Opening this loads the newest Diablo II: Resurrected headlines from Blizzard News.'],
+      loading: ['Loading the newest headlines from Blizzard News.'],
+      ok: ['Headlines from Blizzard News, checked ' + when + '.'],
+      empty: ['Blizzard News has no Diablo II: Resurrected posts in its latest list right now.'],
+      stale: ['Blizzard News could not be reached just now; these headlines were checked ' + when + '.'],
+      failed: ['The news could not load right now. The rest of D2Looter is not affected.'],
+      unavailable: ['Headlines load at ', h('a', { href: 'https://radmagelabs.com/d2looter/' }, 'radmagelabs.com/d2looter/'), '.'],
+    };
+    append(clear($('news-note')), notes[news.loading && !(news.items && news.items.length) ? 'loading' : news.status]);
+    $('news-body').setAttribute('aria-busy', String(news.loading));
+    var list = clear($('news-list'));
+    (news.status === 'unavailable' ? [] : news.items || []).forEach(function (i) {
+      list.appendChild(h('li', null, h('a', { href: i.link, target: '_blank', rel: 'noopener noreferrer' }, i.title),
+        i.date ? h('time', { datetime: i.date }, newsDate(i.date)) : null));
+    });
+    list.hidden = !list.firstChild;
+  }
+  // news.json from this site. A 404 page means this address doesn't pass the list through (GitHub
+  // Pages); Blizzard's own "not found" comes back as JSON and counts as a failure.
+  function fetchNews() {
+    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, NEWS_TIMEOUT);
+    return fetch('news.json', { cache: 'no-cache', credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal })
+      .then(function (res) {
+        if (res.status === 404 && (res.headers.get('Content-Type') || '').indexOf('json') < 0) return { missing: true };
+        return res.ok ? res.json().then(function (raw) { return { items: News.parseFeed(raw) }; }) : {};
+      })
+      .catch(function () { return {}; })
+      .then(function (r) { clearTimeout(timer); return r; });
+  }
+  function loadNews() {
+    if (news.loading) return;
+    var cache = News.sanitizeCache(Store.read('news', null));
+    if (cache) { news.items = cache.items; news.fetchedAt = cache.fetchedAt; news.checkedAt = cache.fetchedAt; news.status = 'ok'; }
+    if (cache && News.isFresh(cache, Date.now())) { renderNews(); return; }
+    if (!/^https?:$/.test(location.protocol)) { news.status = 'unavailable'; renderNews(); return; }
+    news.loading = true;
+    news.checkedAt = Date.now();
+    renderNews();
+    fetchNews().then(function (r) {
+      news.loading = false;
+      if (r.missing) news.status = 'unavailable';
+      else if (r.items && r.items.length) {
+        news.items = r.items; news.fetchedAt = Date.now(); news.status = 'ok';
+        Store.write('news', { fetchedAt: news.fetchedAt, items: r.items });
+      } else if (r.items) { news.items = []; news.status = 'empty'; }
+      else news.status = news.items && news.items.length ? 'stale' : 'failed';
+      renderNews();
+    });
+  }
+  // Reads the headlines when the panel is open and showing, this address passes them through, and
+  // the last read is old enough.
+  function refreshNews() {
+    var panel = $('news');
+    if (panel.open && !panel.hidden && !news.loading && news.status !== 'unavailable' && Date.now() - news.checkedAt >= News.REFRESH) loadNews();
+  }
+  function wireNews() {
+    var panel = $('news');
+    panel.addEventListener('toggle', function () {
+      if (settings.newsOpen !== panel.open) { settings.newsOpen = panel.open; save(); }
+      refreshNews();
+    });
+    renderNews();
+    if (settings.newsOpen) panel.open = true;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // share
+  // ---------------------------------------------------------------------------------------------
+  // Share always passes the canonical address, wherever the page was opened: the device's share
+  // sheet when there is one; otherwise, or if it fails, the link is copied. Closing the sheet does
+  // nothing.
+  function sharePage() {
+    var url = document.querySelector('link[rel="canonical"]').href;
+    var data = { title: document.querySelector('meta[property="og:title"]').content, url: url };
+    function copy() {
+      var shown = function () { toast('Copy this link: ' + url); };
+      try { navigator.clipboard.writeText(url).then(function () { toast('Link copied: ' + url); }, shown); } catch (e) { shown(); }
+    }
+    if (navigator.share && (!navigator.canShare || navigator.canShare(data))) {
+      try { navigator.share(data).catch(function (e) { if (!e || e.name !== 'AbortError') copy(); }); return; } catch (e) { /* copy instead */ }
+    }
+    copy();
+  }
+  document.querySelectorAll('[data-share]').forEach(function (b) { b.addEventListener('click', sharePage); });
+
+  // ---------------------------------------------------------------------------------------------
   // routing
   // ---------------------------------------------------------------------------------------------
   function route() {
@@ -174,6 +281,9 @@
     var views = { items: renderItems, item: renderItem, calc: renderCalc, sim: renderSim, grail: renderGrail, mf: renderMF, runes: renderRunes, accuracy: renderAccuracy };
     if (!views[view]) view = 'items';
     document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.dataset.view !== view; });
+    // The news panel sits at the top of the item search only.
+    $('news').hidden = view !== 'items';
+    refreshNews();
     document.querySelectorAll('.tabs a').forEach(function (a) {
       var on = a.dataset.view === view || (view === 'item' && a.dataset.view === 'items');
       if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
@@ -360,7 +470,7 @@
     var unsupported = tops.filter(function (t) { return /Desecrated|Herald|Uber (Talic|Madawc|Korlic)/.test(t); });
     var where = tops.slice(0, 3).join(', ') + (tops.length > 3 ? ' and ' + (tops.length - 3) + ' more' : '');
     return 'It is never rolled at random: only ' + named.join(', ') + ' names it, reached from ' + where + '. ' +
-      (unsupported.length === tops.length ? 'Those are Desecrated (Terror) zone, Herald or Uber Ancient drops, which v0.1 does not calculate.' : 'Some of those are not monsters D2Looter lists yet.');
+      (unsupported.length === tops.length ? 'Those are Desecrated (Terror) zone, Herald or Uber Ancient drops, which D2Looter does not calculate yet.' : 'Some of those are not monsters D2Looter lists yet.');
   }
   function targetFor(x) {
     if (x.kind === 'unique') return { kind: 'unique', id: x.key, code: x.code };
@@ -963,6 +1073,7 @@
     }
   });
   applyTheme();
+  wireNews();
   renderProfileSelect();
   loadProfile(settings.profile, function () { route(); });
 })();
