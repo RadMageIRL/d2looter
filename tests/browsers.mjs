@@ -104,6 +104,9 @@ for (const engine of only) {
       await page.waitForFunction(VISIBLE, null, { timeout: 20000 });
       await page.evaluate(() => localStorage.setItem('d2looter:v1:settings', JSON.stringify({ newsOpen: true })));
       await page.reload();
+      // Let the panel's first read finish before navigating again, or the next page load cancels it.
+      await page.waitForFunction(VISIBLE, null, { timeout: 20000 });
+      await page.waitForFunction(newsShown, null, { timeout: 20000 });
       for (const v of VIEWS) {
         await page.goto(base + '#' + v);
         await page.waitForFunction(VISIBLE, null, { timeout: 20000 });

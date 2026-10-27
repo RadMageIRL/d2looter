@@ -204,13 +204,17 @@
     list.hidden = !list.firstChild;
   }
   // news.json from this site. A 404 page means this address doesn't pass the list through (GitHub
-  // Pages); Blizzard's own "not found" comes back as JSON and counts as a failure.
+  // Pages); Blizzard's own "not found" comes back as JSON and counts as a failure. The body is read
+  // every time, so nothing is left loading (Safari reports an unread body as cancelled).
   function fetchNews() {
     var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, NEWS_TIMEOUT);
     return fetch('news.json', { cache: 'no-cache', credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal })
       .then(function (res) {
-        if (res.status === 404 && (res.headers.get('Content-Type') || '').indexOf('json') < 0) return { missing: true };
-        return res.ok ? res.json().then(function (raw) { return { items: News.parseFeed(raw) }; }) : {};
+        var missing = res.status === 404 && (res.headers.get('Content-Type') || '').indexOf('json') < 0;
+        return res.text().then(function (body) {
+          if (missing) return { missing: true };
+          return res.ok ? { items: News.parseFeed(JSON.parse(body)) } : {};
+        });
       })
       .catch(function () { return {}; })
       .then(function (r) { clearTimeout(timer); return r; });
