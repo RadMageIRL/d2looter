@@ -11,6 +11,8 @@ open; radmagelabs.com passes that request on to Blizzard News.
 **Use it at [radmagelabs.com/d2looter](https://radmagelabs.com/d2looter/)** (also at
 [radmageirl.github.io/d2looter](https://radmageirl.github.io/d2looter/)). This is v0.3.0.
 
+![D2Looter v0.3.0 in the Unique theme: Where to farm for the Harlequin Crest on Hell, with run times entered for Mephisto, Andariel, the Chaos Sanctuary and Pindleskin, ranked by chance per hour, with each run's chance per kill and per run, the runs for a 50% and a 90% chance, the average time to a drop and the chance in two hours; the Chaos Sanctuary run lists the chance of each of its four kills](screenshots/where-to-farm.png)
+
 ## Run it locally
 
 On Windows, double-click `launch.cmd` (or open `index.html` in a browser). Nothing needs to be
