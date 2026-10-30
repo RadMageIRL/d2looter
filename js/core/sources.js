@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
 
-  // [monster id, area key(s), group]
+  // [monster id, area key(s), group, name when the game's name is ambiguous]
   var BOSSES = [
     ['andariel', 'Act 1 - Catacombs 4', 'Act bosses'],
     ['duriel', "Act 2 - Duriel's Lair", 'Act bosses'],
@@ -23,7 +23,7 @@
     ['uberandariel', 'Act 5 - Pandemonium 1', 'Uber bosses'],
     ['uberduriel', 'Act 5 - Pandemonium 2', 'Uber bosses'],
     ['uberizual', 'Act 5 - Pandemonium 3', 'Uber bosses'],
-    ['diabloclone', '', 'Uber bosses'],
+    ['diabloclone', '', 'Uber bosses', 'Diablo Clone'],
   ];
   var PANDEMONIUM = /^Act 5 - Pandemonium/;
   // Superuniques d2data gives no area for, placed by silospen/DropCalc HardcodedAreas.kt. The
@@ -52,7 +52,7 @@
         if (!m || !m.tc.reg || !m.tc.reg[d]) return;
         var lv = b[1] ? levelByKey.get(b[1]) : null;
         var base = { type: 'boss', cls: b[0], area: lv ? lv.id : null };
-        out.push({ id: 'b:' + b[0], name: m.name, group: b[2], area: lv ? lv.name : '', src: base, quest: false });
+        out.push({ id: 'b:' + b[0], name: b[3] || m.name, group: b[2], area: lv ? lv.name : '', src: base, quest: false });
         // D2R gives some bosses their quest class on every kill; then there is nothing separate to show.
         if (m.questId && m.tc.quest && m.tc.quest[d] && m.tc.quest[d] !== m.tc.reg[d]) out.push({ id: 'q:' + b[0], name: m.name + ' (quest kill)', group: b[2], area: lv ? lv.name : '', src: base, quest: true });
       });

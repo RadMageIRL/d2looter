@@ -24,7 +24,7 @@ try { pw = createRequire(join(resolve(process.env.PLAYWRIGHT_DIR || '.'), 'packa
   process.exit(2);
 }
 
-const VIEWS = ['items', 'item/u:Harlequin Crest', 'calc', 'sim', 'grail', 'mf', 'runes', 'accuracy'];
+const VIEWS = ['items', 'item/u:Harlequin Crest', 'calc', 'farm/u:Harlequin Crest', 'sim', 'grail', 'mf', 'runes', 'accuracy'];
 const SIZES = [
   { name: '1920x1080', width: 1920, height: 1080 },
   { name: '1366x768', width: 1366, height: 768 },
@@ -75,6 +75,21 @@ const LAYOUT = `(() => {
   }
   return out;
 })()`;
+// The news rows: each spans the list, the list spans the panel, and each date ends at its row's
+// right edge, on the headline's first line.
+const NEWS_ROWS = `(() => {
+  const list = document.getElementById('news-list'), body = document.getElementById('news-body');
+  const cs = getComputedStyle(body), inner = body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const out = [];
+  if (Math.abs(list.getBoundingClientRect().width - inner) > 1) out.push('list is ' + list.getBoundingClientRect().width + 'px of ' + inner);
+  for (const li of list.querySelectorAll('li')) {
+    const r = li.getBoundingClientRect(), a = li.querySelector('a').getBoundingClientRect(), t = li.querySelector('time').getBoundingClientRect();
+    if (Math.abs(r.width - list.getBoundingClientRect().width) > 1) out.push('row narrower than the list: ' + li.textContent.slice(0, 30));
+    if (Math.abs(t.right - r.right) > 1) out.push('date not at the right edge: ' + li.textContent.slice(0, 30));
+    if (a.right > t.left || Math.abs(t.top - a.top) > 6) out.push('date not beside the headline: ' + li.textContent.slice(0, 30));
+  }
+  return out;
+})()`;
 
 async function check(engine, name, fn) {
   step = '';
@@ -111,9 +126,11 @@ for (const engine of only) {
         await page.goto(base + '#' + v);
         await page.waitForFunction(VISIBLE, null, { timeout: 20000 });
         if (v === 'items') await page.waitForFunction(newsShown);
+        if (v === 'farm/u:Harlequin Crest') await page.waitForSelector('#view-farm .farm-table tbody tr');
         await page.waitForTimeout(150);
         const layout = await page.evaluate(LAYOUT);
         assert.deepEqual(layout, [], `${v}`);
+        if (v === 'items' && newsHere) assert.deepEqual(await page.evaluate(NEWS_ROWS), [], 'news rows');
         if (dir && (size.name === '1920x1080' || size.name === '390x844')) await page.screenshot({ path: join(dir, `${size.name}-${v.replace(/[^a-z]/gi, '_')}.png`), fullPage: size.mobile ? false : true });
       }
       assert.deepEqual(problems, []);
@@ -270,6 +287,46 @@ for (const engine of only) {
     assert.equal(await page.evaluate(() => localStorage.getItem('other-app')), 'keep me');
     assert.ok(keys.every((k) => k === 'other-app' || k.startsWith('d2looter:v1:')), keys.join(', '));
     assert.deepEqual(problems, []);
+  });
+
+  await check(engine, 'where to farm: the item page button, run times committed with Enter or Tab re-rank and keep focus, an unreadable time is flagged, a click that ends typing still lands', async () => {
+    const c = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+    const p = await c.newPage();
+    const pr = watch(p);
+    const timed = () => p.$$eval('#view-farm .farm-table', (t) => t.length > 1 ? [...t[0].querySelectorAll('tbody tr')].map((r) => r.dataset.key) : []);
+    await p.goto(base + '#item/u:Harlequin Crest');
+    await p.waitForSelector('#view-item .detail');
+    await p.click('#view-item a.button[href^="#farm/"]');
+    await p.waitForSelector('#view-farm .farm-table tbody tr');
+    assert.equal(await p.inputValue('#view-farm input[role=combobox]'), 'Harlequin Crest (Shako)');
+    step = 'Enter commits a run time';
+    await p.click('#view-farm tr[data-key="b:baalcrab@2"] input.time');
+    await p.keyboard.type('45');
+    await p.keyboard.press('Enter');
+    await p.waitForFunction(() => document.querySelectorAll('#view-farm h4').length === 2);
+    assert.deepEqual(await p.evaluate(() => [document.activeElement.getAttribute('data-focus'), document.activeElement.value]), ['time:b:baalcrab@2', '0:45']);
+    step = 'Tab commits a run time';
+    await p.click('#view-farm tr[data-key="b:mephisto@2"] input.time');
+    await p.keyboard.type('1:15');
+    await p.keyboard.press('Tab');
+    await p.waitForFunction(() => document.querySelectorAll('#view-farm .farm-table')[0].querySelectorAll('tbody tr').length === 2);
+    assert.deepEqual(await timed(), ['b:baalcrab@2', 'b:mephisto@2']);
+    step = 'an unreadable time';
+    await p.click('#view-farm tr[data-key="b:andariel@2"] input.time');
+    await p.keyboard.type('soon');
+    await p.keyboard.press('Tab');
+    await p.waitForTimeout(150);
+    assert.deepEqual(await p.$eval('#view-farm tr[data-key="b:andariel@2"] input.time', (i) => [i.value, i.getAttribute('aria-invalid'), i.nextElementSibling.hidden]), ['soon', 'true', false]);
+    assert.deepEqual(await timed(), ['b:baalcrab@2', 'b:mephisto@2']);
+    step = 'a click on a target while a time is typed';
+    await p.click('#view-farm tr[data-key="g:baal@2"] input.time');
+    await p.keyboard.type('4:00');
+    await p.click('#view-farm tr[data-key="b:diablo@2"] button.link');
+    await p.waitForFunction(() => location.hash === '#calc' && /from Diablo in The Chaos Sanctuary \(Hell\)/.test((document.querySelector('#view-calc h3') || {}).textContent || ''));
+    // Settings are saved a moment after a change.
+    await p.waitForFunction(() => JSON.parse(localStorage.getItem('d2looter:v1:settings')).farm.times['g:baal@2'] === 240);
+    assert.deepEqual(pr, []);
+    await c.close();
   });
 
   // In a fresh profile: the checks above leave the panel open in the page's own settings, and a

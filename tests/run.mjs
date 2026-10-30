@@ -965,6 +965,200 @@ test('storage: missing, broken and unavailable storage never throw, and a broken
 });
 
 // ---------------------------------------------------------------------------------------------
+// Where to farm
+// ---------------------------------------------------------------------------------------------
+// js/core/farm.js only combines the engine's chances per kill; every chance it lists must be the
+// engine's own number for that source, and nothing may be ranked by a run time nobody entered.
+const Farm = require('../js/core/farm.js');
+const SRC = Object.fromEntries(PROFILES.map((id) => [id, Sources.create(DATA[id], ENG[id])]));
+const SOLO = { players: 1, party: 1, mf: 0, ladder: false };
+const SHAKO = { kind: 'unique', id: 'Harlequin Crest', code: 'uap' };
+const farmRows = (id, target, diffs = [0, 1, 2], opts = SOLO) => Farm.fixedRows(ENG[id], SRC[id], target, opts, diffs).rows;
+test('farm: run times read as m:ss, h:mm:ss, seconds or with units; blank is no time; anything else is invalid', () => {
+  for (const [text, s] of [['1:30', 90], ['0:45', 45], ['12:05', 725], ['1:02:03', 3723], ['90', 90], ['90s', 90], ['45 sec', 45], ['2 seconds', 2],
+    ['1.5m', 90], ['3 minutes', 180], ['2m 30s', 150], ['2m30s', 150], ['1h', 3600], ['1 hr 5 min', 3900], [' 1:30 ', 90], ['24:00:00', 86400]]) {
+    assert.equal(Farm.parseRunTime(text), s, JSON.stringify(text));
+  }
+  for (const blank of ['', '   ', null, undefined]) assert.equal(Farm.parseRunTime(blank), null, JSON.stringify(blank));
+  for (const bad of ['0', '0:00', '-5', 'abc', '1:5', '1:60', '1:30:', '25:00:00', '24:00:01', '2ms', '1,5m', 'm:ss', '1:30 pm', '90 days', '1'.repeat(25), '1 h '.repeat(20)]) {
+    assert.ok(Number.isNaN(Farm.parseRunTime(bad)), `rejects ${JSON.stringify(bad)}`);
+  }
+  assert.equal(Farm.formatClock(90), '1:30');
+  assert.equal(Farm.formatClock(45), '0:45');
+  assert.equal(Farm.formatClock(3723), '1:02:03');
+  assert.deepEqual([30, 59.6, 90, 720, 3600 * 3.24, 3600 * 30, 86400 * 4.5, 86400 * 400, 86400 * 365.25 * 35, Infinity].map(Farm.formatDuration),
+    ['30 s', '1 min', '1.5 min', '12 min', '3.2 h', '30 h', '4.5 days', '1.1 years', '35 years', 'never']);
+});
+test('farm: a run of several kills is 1 - (1 - p1)(1 - p2)..., and k kills of one monster is 1 - (1 - p)^k', () => {
+  close(Farm.runChance([[0.5, 1], [0.5, 1]]), 0.75, 1e-15);
+  close(Farm.runChance([[0.1, 1], [0.2, 1], [0.3, 1]]), 1 - 0.9 * 0.8 * 0.7, 1e-15);
+  close(Farm.runChance([[0.01, 40]]), Prob.atLeastOne(0.01, 40), 1e-15);
+  close(Farm.runChance([[1e-9, 1], [2e-9, 1]]), 3e-9 - 2e-18, 1e-12, 'tiny chances keep their precision');
+  assert.equal(Farm.runChance([[0, 1], [0, 5]]), 0);
+  assert.equal(Farm.runChance([[1, 1], [0.2, 1]]), 1);
+  assert.equal(Farm.runChance([]), 0);
+  assert.ok(Number.isNaN(Farm.runChance([[1.5, 1]])) && Number.isNaN(Farm.runChance([[0.1, -1]])));
+  const s = Farm.runStats(1 / 1648);
+  close(s.expectedRuns, 1648, 1e-14);
+  assert.deepEqual([s.runs50, s.runs90], [Prob.triesFor(1 / 1648, 0.5), Prob.triesFor(1 / 1648, 0.9)]);
+  assert.deepEqual(Farm.runStats(0), { expectedRuns: Infinity, runs50: Infinity, runs90: Infinity });
+});
+test('farm: chance per hour, the average time to a drop, and the chance in the farming time counted in whole runs', () => {
+  const t = Farm.timeStats(0.01, 90, 2);
+  close(t.perHour, 1 - Math.pow(0.99, 40), 1e-14, '40 runs of 90 s in an hour');
+  assert.equal(t.expectedSeconds, 9000);
+  assert.equal(t.runsIn, 80);
+  close(t.chanceIn, 1 - Math.pow(0.99, 80), 1e-14);
+  const odd = Farm.timeStats(0.01, 25 * 60, 1);
+  assert.equal(odd.runsIn, 2, 'a 25-minute run fits twice in an hour');
+  close(odd.perHour, 1 - Math.pow(0.99, 60 / 25), 1e-14, 'per hour keeps the 2.4 runs at that pace');
+  assert.equal(Farm.timeStats(0.01, 7200, 1).runsIn, 0, 'a run longer than the farming time');
+  assert.equal(Farm.timeStats(0.01, 7200, 1).chanceIn, 0);
+  assert.equal(Farm.timeStats(0, 60, 1).expectedSeconds, Infinity);
+  assert.equal(Farm.timeStats(0.01, 0.1 + 0.2 - 0.3 + 60, 0.5).runsIn, 30, 'floating-point noise does not lose a run');
+  for (const bad of [null, undefined, NaN, 0, -60, 0.5, Farm.MAX_SECONDS + 1, '90']) assert.equal(Farm.timeStats(0.01, bad, 2), null, `no time for ${String(bad)}`);
+});
+test('farm: every boss and superunique that can drop the item is listed once per difficulty, with the engine\'s own chance', () => {
+  for (const id of PROFILES) {
+    const rows = farmRows(id, SHAKO);
+    for (const d of [0, 1, 2]) {
+      const dropping = SRC[id].fixed(d).filter((s) => { const r = ENG[id].dropChance(s.src, SHAKO, { ...SOLO, difficulty: d, quest: s.quest }); return r && r.chance > 0; });
+      const singles = rows.filter((r) => r.kind === 'single' && r.difficulty === d);
+      assert.deepEqual(singles.map((r) => r.source.id).sort(), dropping.map((s) => s.id).sort(), `${id} ${d}`);
+      for (const r of singles) {
+        assert.equal(r.chance, ENG[id].dropChance(r.source.src, SHAKO, { ...SOLO, difficulty: d, quest: r.source.quest }).chance, `${id} ${r.key}`);
+        assert.ok(r.chance > 0 && r.runChance === r.chance && r.killsPerRun === 1);
+        assert.equal(r.key, `${r.source.id}@${d}`);
+      }
+    }
+    assert.ok(!rows.some((r) => r.difficulty === 0), `${id}: no Normal boss has a Shako in its treasure class`);
+    assert.equal(new Set(rows.map((r) => r.key)).size, rows.length, `${id}: keys are unique`);
+  }
+});
+test('farm: area runs: the bosses and superuniques of one area as one run, each kill shown, 1 - (1 - p1)(1 - p2)... per run', () => {
+  const rows = farmRows('d2r-base', SHAKO, [2]);
+  const single = (id) => rows.find((r) => r.key === `${id}@2`).chance;
+  const chaos = rows.find((r) => r.key === 'g:Act 4 - Diablo 1@2');
+  assert.equal(chaos.name, 'The Chaos Sanctuary');
+  assert.deepEqual(chaos.kills.map((k) => k.name).sort(), ['Diablo', 'Grand Vizier of Chaos', 'Infector of Souls', 'Lord De Seis']);
+  assert.equal(chaos.killsPerRun, 4);
+  assert.equal(chaos.chance, null, 'a run of several kills has no single chance per kill');
+  close(chaos.runChance, 1 - chaos.kills.reduce((a, k) => a * (1 - k.chance), 1), 1e-12);
+  assert.equal(chaos.kills.find((k) => k.name === 'Diablo').chance, single('b:diablo'));
+  assert.ok(chaos.runChance > single('b:diablo'), 'the seal bosses add to Diablo');
+  const baal = rows.find((r) => r.key === 'g:baal@2');
+  assert.deepEqual(baal.kills.map((k) => k.name), ['Colenzo the Annihilator', 'Achmel the Cursed', 'Bartuc the Bloody', 'Ventar the Unholy', 'Lister the Tormentor', 'Baal']);
+  assert.equal(baal.area, 'Throne of Destruction and The Worldstone Chamber');
+  close(baal.runChance, Farm.runChance(baal.kills.map((k) => [k.chance, 1])), 1e-15);
+  // Quest kills are the same monster as the plain kill, so they never join a run.
+  const q = farmRows('lod-114d', SHAKO, [2]);
+  assert.ok(q.some((r) => r.key === 'q:mephisto@2' && r.source.quest), '1.14d lists the quest kill');
+  for (const g of q.filter((r) => r.kind === 'group')) assert.ok(!g.kills.some((k) => /quest kill/.test(k.name)), g.key);
+  // A run is listed only when two or more of its kills can drop the item: the Countess alone drops Ist.
+  const ist = farmRows('d2r-base', { kind: 'base', code: 'r24' }, [2]);
+  assert.ok(ist.some((r) => r.key === 's:The Countess@2'));
+  for (const g of ist.filter((r) => r.kind === 'group')) assert.ok(g.kills.filter((k) => k.chance > 0).length >= 2, g.key);
+});
+test('farm: ranking: without run times by chance per run; rows with a run time first, by chance per hour', () => {
+  const R = (key, p, d = 2, extra = {}) => ({ key, kind: 'single', name: key, difficulty: d, chance: p, runChance: p, killsPerRun: 1, kills: [{ name: key, chance: p }], ...extra });
+  const rows = [R('B', 0.001), R('A', 0.002), R('D', 0.002, 1), R('C', null, 2, { kind: 'group', runChance: 0.003, killsPerRun: 3 }), R('E', 0.002, 2, { name: 'A2' })];
+  const plain = Farm.rank(rows, { times: {}, kills: {}, hours: 1 });
+  assert.deepEqual(plain.timed, []);
+  assert.deepEqual(plain.untimed.map((x) => x.row.key), ['C', 'A', 'E', 'D', 'B'], 'chance per run, then the harder difficulty, then the name');
+  // B is the weakest per run but the fastest: with times, B 30 s beats A 2 min per hour.
+  const timed = Farm.rank(rows, { times: { B: 30, A: 120 }, kills: {}, hours: 1 });
+  assert.deepEqual(timed.timed.map((x) => x.row.key), ['B', 'A']);
+  assert.deepEqual(timed.untimed.map((x) => x.row.key), ['C', 'E', 'D']);
+  close(timed.timed[0].time.perHour, 1 - Math.pow(0.999, 120), 1e-14);
+  assert.equal(timed.timed[0].seconds, 30);
+  // On the real tables the untimed list never goes up in chance per run.
+  const real = Farm.rank(farmRows('d2r-base', SHAKO), { times: {}, kills: {}, hours: 2 }).untimed;
+  for (let i = 1; i < real.length; i++) assert.ok(real[i].runChance <= real[i - 1].runChance, `${real[i].row.key} after ${real[i - 1].row.key}`);
+});
+test('farm: missing or invalid run times and kills count as none, and saved ones are cleaned', () => {
+  const R = (key, p) => ({ key, kind: 'single', name: key, difficulty: 2, chance: p, runChance: p, killsPerRun: 1, kills: [] });
+  const r = Farm.rank([R('A', 0.01), R('B', 0.02), R('C', 0.03), R('D', 0.04)], { times: { A: NaN, B: 0, C: Farm.MAX_SECONDS + 1, D: '60' }, kills: {}, hours: 1 });
+  assert.deepEqual(r.timed, []);
+  assert.ok(r.untimed.every((x) => x.time === null && x.seconds === null));
+  const junk = JSON.parse('{"b:mephisto@2":75,"b:andariel@2":-1,"b:baalcrab@2":"60","b:diablo@2":null,"b:duriel@2":1e9,"__proto__":60,"constructor":{"x":1},"s:Pindleskin@2":45.5}');
+  junk['x'.repeat(201)] = 60;
+  const clean = Farm.cleanTimes(junk);
+  assert.deepEqual(clean, { 'b:mephisto@2': 75, 's:Pindleskin@2': 45.5 });
+  assert.equal(Object.getPrototypeOf(clean), Object.prototype);
+  for (const bad of [null, 'x', [60], 5]) assert.deepEqual(Farm.cleanTimes(bad), {});
+  assert.deepEqual(Farm.cleanKills({ a: 40, b: 0, c: 2.5, d: 10001, e: '3', f: 10000 }), { a: 40, f: 10000 });
+  const many = {};
+  for (let i = 0; i < 1500; i++) many['k' + i] = 60;
+  assert.equal(Object.keys(Farm.cleanTimes(many)).length, 1000, 'at most 1000 saved run times');
+});
+test('farm: area monsters are per kill, with the player\'s kills per run (Cow King\'s Leathers: Hell Bovines only)', () => {
+  const id = 'd2r-base';
+  const s = DATA[id].setItems.find((x) => x.set === "Cow King's Leathers");
+  const t = { kind: 'set', id: s.id, code: s.code };
+  assert.deepEqual(farmRows(id, t), [], 'no boss or superunique drops it');
+  const rows = Farm.areaJobs(SRC[id], [2]).map((j) => Farm.areaRow(ENG[id], j, t, SOLO)).filter(Boolean);
+  assert.ok(rows.length >= 3, `${rows.length} rows`);
+  for (const r of rows) {
+    assert.match(r.key, /^m:Act 1 - Moo Moo Farm:hellbovine:(regular|champion|unique)@2$/);
+    assert.equal(r.kind, 'area');
+    assert.equal(r.chance, ENG[id].dropChance(r.source.src, t, { ...SOLO, difficulty: 2 }).chance);
+  }
+  const reg = rows.find((r) => /:regular@2$/.test(r.key));
+  const ranked = (kills) => Farm.rank([reg], { times: {}, kills: { [reg.key]: kills }, hours: 1 }).untimed[0];
+  close(ranked(40).runChance, Prob.atLeastOne(reg.chance, 40), 1e-14);
+  assert.equal(ranked(40).killsPerRun, 40);
+  assert.equal(ranked(0).killsPerRun, 1, 'kills per run is at least one');
+  assert.equal(ranked(1e6).killsPerRun, 10000, 'and at most 10,000');
+  assert.equal(ranked(undefined).runChance, reg.chance);
+});
+test('farm: switching the game version: the same item gets each version\'s own rows, ladder rules included', () => {
+  for (const id of PROFILES) assert.ok(farmRows(id, SHAKO, [2]).length > 10, id);
+  assert.ok(farmRows('lod-114d', SHAKO, [2]).some((r) => r.key === 'q:andariel@2'), '1.14d has a separate Andariel quest kill');
+  assert.ok(!farmRows('d2r-base', SHAKO, [2]).some((r) => r.key === 'q:andariel@2'), 'D2R gives Andariel her quest class on every kill');
+  const bl = { kind: 'unique', id: 'Bloodletter', code: DATA['d2r-rotw'].uniques.find((u) => u.key === 'Bloodletter').code };
+  assert.deepEqual(farmRows('d2r-rotw', bl), [], 'ladder only in Reign of the Warlock Season 15');
+  assert.ok(farmRows('d2r-rotw', bl, [0, 1, 2], { ...SOLO, ladder: true }).length > 0);
+  assert.ok(farmRows('d2r-base', bl).length > 0, 'not ladder only in the LoD ruleset');
+  // More Magic Find never lowers a unique's chance per run.
+  const at = (mf) => farmRows('d2r-base', SHAKO, [2], { ...SOLO, mf }).find((r) => r.key === 'b:mephisto@2').runChance;
+  assert.ok(at(300) > at(0));
+});
+test('Diablo Clone: his treasure class names Annihilus, so a Hell kill always drops it, and the Accuracy page says it is calculated', () => {
+  for (const id of PROFILES) {
+    const d = DATA[id];
+    assert.deepEqual(d.tcs.find((t) => t.name === 'ROP (H)').entries, [['Annihilus', 1]], id);
+    assert.deepEqual(d.monsters.diabloclone.tc.reg, ['ROP', 'ROP (N)', 'ROP (H)'], id);
+    const ann = { kind: 'unique', id: 'Annihilus', code: 'cm1' };
+    assert.equal(ENG[id].dropChance({ type: 'boss', cls: 'diabloclone' }, ann, { difficulty: 2 }).chance, 1, id);
+    const clone = SRC[id].fixed(2).find((s) => s.src.cls === 'diabloclone');
+    assert.deepEqual([clone.name, clone.group], ['Diablo Clone', 'Uber bosses'], `${id}: not just "Diablo"`);
+    // The Uber Tristram bosses have no treasure class, so the model has no row for them.
+    for (const u of ['ubermephisto', 'uberdiablo', 'uberbaal']) assert.equal(d.monsters[u], undefined, `${id} ${u}`);
+  }
+  const app = readFileSync(join(ROOT, 'js', 'app.js'), 'utf8');
+  assert.ok(!app.includes('Annihilus (Diablo Clone)'), 'Annihilus is not listed as a scripted drop');
+  assert.ok(app.includes('Diablo Clone (Uber Diablo) is calculated from his treasure class like any other monster.'));
+  assert.ok(app.includes("That is the chance once he is killed, not how often he appears"), 'the chance per kill is told apart from meeting him');
+  assert.ok(app.includes('everything the Uber Tristram bosses drop, the Hellfire Torch included'));
+});
+test('farm: the page has its tab, its section and js/core/farm.js, loaded after prob.js', () => {
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  assert.ok(html.includes('<a href="#farm" data-view="farm">Where to farm</a>'));
+  assert.ok(html.includes('<section id="view-farm" data-view="farm" hidden></section>'));
+  assert.ok(html.indexOf('<script src="js/core/prob.js?v=') < html.indexOf('<script src="js/core/farm.js?v='), 'farm.js reads D2Prob when it loads');
+  assert.match(readFileSync(join(ROOT, 'js', 'app.js'), 'utf8'), /href: '#farm\/' \+ encodeURIComponent\(x\.id\)/, 'the item page links to it');
+});
+test('farm: content D2Looter does not calculate gets no rows (Sunder Charms, Herald drops)', () => {
+  for (const [id, key] of [['d2r-base', 'Cold Rupture'], ['d2r-rotw', 'Cold Rupture'], ['d2r-rotw', "Defender's Bile"]]) {
+    const u = DATA[id].uniques.find((x) => x.key === key);
+    assert.ok(u && !u.roll, `${id} ${key} is never rolled at random`);
+    const t = { kind: 'unique', id: u.id, code: u.code };
+    assert.deepEqual(farmRows(id, t), [], `${id} ${key}: no boss or superunique`);
+    assert.deepEqual(Farm.areaJobs(SRC[id], [2]).map((j) => Farm.areaRow(ENG[id], j, t, SOLO)).filter(Boolean), [], `${id} ${key}: no Hell area monster`);
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
 // Diablo II news, share and feedback
 // ---------------------------------------------------------------------------------------------
 // js/core/news.js reads Blizzard's D2R news list for the page and checks the headlines it keeps in

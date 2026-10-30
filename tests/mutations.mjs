@@ -33,6 +33,16 @@ const MUTANTS = [
   ['js/core/engine.js', 'if (!u.roll || u.lvl > ilvl) return false;', 'if (!u.roll || u.lvl >= ilvl) return false;', 'unique lvl <= ilvl'],
   ['js/core/engine.js', 'return season >= window[0] && (window[1] === 0 || season <= window[1]);', 'return season >= window[0] && (window[1] === 0 || season < window[1]);', 'ladder window includes its last season'],
   ['js/core/prob.js', 'return -Math.expm1(n * Math.log1p(-p));', 'return 1 - Math.pow(1 - p, n);', 'precise at-least-one'],
+  // Where to farm: how chances per kill become chances per run and per hour, and how runs are ranked.
+  ['js/core/farm.js', 'if (p > 0 && k > 0) logNone += k * Math.log1p(-p);', 'if (p > 0 && k > 0) logNone += Math.log1p(-p);', 'a run counts every kill'],
+  ['js/core/farm.js', 'perHour: Prob.atLeastOne(pRun, 3600 / seconds),', 'perHour: Prob.atLeastOne(pRun, 60 / seconds),', 'chance per hour counts the runs in 3600 s'],
+  ['js/core/farm.js', 'var runsIn = hours > 0 ? Math.floor((hours * 3600) / seconds + 1e-9) : 0;', 'var runsIn = hours > 0 ? Math.ceil((hours * 3600) / seconds) : 0;', 'the farming time counts whole runs'],
+  ['js/core/farm.js', 'return b.time.perHour - a.time.perHour || b.runChance - a.runChance || tie(a, b);', 'return b.runChance - a.runChance || tie(a, b);', 'timed runs rank by chance per hour'],
+  ['js/core/farm.js', '.sort(function (a, b) { return b.runChance - a.runChance || tie(a, b); });', '.sort(function (a, b) { return (b.row.chance || 0) - (a.row.chance || 0) || tie(a, b); });', 'untimed runs rank by chance per run'],
+  ['js/core/farm.js', 'if (dropping.length < 2) return;', 'if (dropping.length < 1) return;', 'an area run needs two kills that can drop it'],
+  ['js/core/farm.js', 'if (o.s.quest || o.s.src.area == null) return;', 'if (o.s.src.area == null) return;', 'quest kills never join an area run'],
+  ['js/core/farm.js', 'sec = Number(m[1]) * 60 + Number(m[2]);', 'sec = Number(m[1]) * 100 + Number(m[2]);', 'm:ss is minutes and seconds'],
+  ['js/core/farm.js', 'return sec >= 1 && sec <= MAX_SECONDS ? sec : NaN;', 'return sec >= 0 && sec <= MAX_SECONDS ? sec : NaN;', 'a run time is at least one second'],
 ];
 
 function run(dir) {

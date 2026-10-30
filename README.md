@@ -1,14 +1,15 @@
 # D2Looter
 
 A loot and farming companion for Diablo II: Lord of Destruction 1.14d and Diablo II: Resurrected.
-Item search, drop chances worked out from the game's own treasure classes, an odds calculator,
-a Holy Grail tracker, Magic Find, a rune and runeword reference, and the latest Diablo II news. It
+Item search, drop chances worked out from the game's own treasure classes, where to farm each
+item, an odds calculator, a Holy Grail tracker, Magic Find, a rune and runeword reference, and the
+latest Diablo II news. It
 runs entirely in the browser: no account, no ads, no analytics, and nothing is sent anywhere. The
 only thing it asks for is the news headlines, from this same site, and only while the news panel is
 open; radmagelabs.com passes that request on to Blizzard News.
 
 **Use it at [radmagelabs.com/d2looter](https://radmagelabs.com/d2looter/)** (also at
-[radmageirl.github.io/d2looter](https://radmageirl.github.io/d2looter/)). This is v0.2.0.
+[radmageirl.github.io/d2looter](https://radmageirl.github.io/d2looter/)). This is v0.3.0.
 
 ## Run it locally
 
@@ -28,11 +29,19 @@ then open http://127.0.0.1:8023/d2looter/.
 - **Items.** Every unique, set item, rune and base item of the chosen game version, with search,
   kind, category and tier filters. Each item page shows the in-game properties, requirements, its
   treasure class and the bosses and superuniques that drop it most often, and can rank every area
-  monster.
+  monster. Where to farm opens the farming comparison for that item.
 - **Drop calculator.** Pick an item and a boss, superunique or monster in an area, then the
   difficulty, Magic Find, players in the game and party members in your area. It shows the chance
   per kill, the average kills to the first drop, the kills for a 50, 75, 90 and 99% chance, and
   how the number was worked out (monster level, treasure class and its upgrade, NoDrop).
+- **Where to farm.** Pick an item to compare every boss and superunique that can drop it, on one
+  difficulty or all three: the chance per kill and per run, the average runs to a drop and the runs
+  for a 50% and a 90% chance. Areas where several bosses and superuniques meet (the Chaos
+  Sanctuary, Travincal, the Throne of Destruction, a Baal run) are also listed as one run of
+  several kills. Type how long a run takes you and those runs are ranked by chance per hour, with
+  the average time to a drop and the chance in your farming time; without run times the list is
+  ranked by chance per run. Area monsters can be added per kill, with your own kills per run,
+  because how many of each spawn is not modeled.
 - **Odds.** The chance of at least one drop in any number of runs at any odds you type in, with
   the runs needed for each confidence level.
 - **Holy Grail.** A checklist of every unique and set item, with completion overall and by

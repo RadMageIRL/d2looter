@@ -210,12 +210,14 @@ main { flex: 1; width: 100%; max-width: 1200px; margin: 0 auto; padding: 18px va
 .news[open] .news-action::after { content: "Hide"; }
 .news-body { padding: 0 16px 12px; }
 .news-note { margin: 2px 0 8px; color: var(--muted); font-size: 12.5px; }
-.news-list { list-style: none; margin: 0; padding: 0; max-width: 760px; }
-.news-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 2px 14px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+/* Each headline row spans the panel: the headline takes the room and wraps, the date sits at the
+   far right on the headline's first line. */
+.news-list { list-style: none; margin: 0; padding: 0; }
+.news-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 24px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .news-list li:first-child { border-top: 0; }
 .news-list a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
 .news-list a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
-.news-list time { flex-shrink: 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.news-list time { justify-self: end; text-align: right; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
 .news-all { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 
 .banner { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius); padding: 10px 14px; margin: 0 0 14px; font-size: 14px; }
@@ -349,6 +351,61 @@ table.grid button.link:hover { text-decoration: underline; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
 
+/* ---- where to farm ----
+   A wide table on desktops; on narrower screens each row becomes a card with its labels shown. */
+h4 { font-family: var(--head-font); font-weight: 600; font-size: 15px; margin: 18px 0 8px; }
+.head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.head-actions .button { text-decoration: none; color: var(--text); }
+.field.checks { flex-direction: row; flex-wrap: wrap; gap: 6px 24px; }
+.field.checks > label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); }
+.farm-best { margin: 4px 0 6px; }
+.farm-notes { margin-top: 14px; }
+.farm-notes p { margin: 0 0 4px; }
+.input.mini { min-height: 30px; padding: 3px 7px; }
+.input.time { width: 5.6em; }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.field-error { color: var(--danger); font-size: 12px; margin-top: 3px; white-space: normal; }
+label.kills { white-space: nowrap; }
+label.kills .input { width: 5.5em; margin-left: 2px; }
+.nowrap { white-space: nowrap; }
+/* Fixed column widths, so "Your runs" and "Other targets" line up. */
+.farm-table { table-layout: fixed; }
+.farm-table th, .farm-table td { padding: 7px 9px; overflow-wrap: anywhere; }
+table.grid.farm-table th.num { white-space: normal; }
+.farm-table th:nth-child(1) { width: 19%; }
+.farm-table th:nth-child(2) { width: 8%; }
+.farm-table th:nth-child(3) { width: 14%; }
+.farm-table th:nth-child(4) { width: 9%; }
+.farm-table th:nth-child(5) { width: 8%; }
+.farm-table th:nth-child(6) { width: 10%; }
+.farm-table th:nth-child(7) { width: 9.5%; }
+.farm-table th:nth-child(8) { width: 7%; }
+.farm-table th:nth-child(9) { width: 7.5%; }
+.farm-table th:nth-child(10) { width: 8%; }
+table.grid.farm-table td.kills-list { white-space: normal; }
+.farm-table td.kills-list .small { overflow-wrap: normal; }
+.farm-table .diff-tag { display: none; }
+.farm-table .tstart { border-left: 1px solid var(--line-2); }
+.farm-table td.tstart { white-space: nowrap; }
+.farm-table .input.time { width: 4.8em; max-width: 100%; }
+@media (max-width: 1080px) {
+  .table-wrap.farm-wrap { overflow: visible; border: 0; border-radius: 0; background: none; }
+  .farm-table, .farm-table tbody, .farm-table tr, .farm-table td { display: block; }
+  .farm-table thead { display: none; }
+  .farm-table tr {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px 16px;
+    padding: 12px 14px; margin: 0 0 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2);
+  }
+  table.grid.farm-table td, table.grid.farm-table td.num, table.grid.farm-table tbody tr:hover td { padding: 0; border: 0; text-align: left; white-space: normal; background: none; }
+  .farm-table td::before { content: attr(data-label); display: block; font-size: 11.5px; color: var(--muted); }
+  .farm-table td.target, .farm-table td.kills-list { grid-column: 1 / -1; }
+  .farm-table td.target::before { content: none; }
+  .farm-table td.diff { display: none; }
+  .farm-table .diff-tag { display: inline-block; }
+  .farm-table .tstart { border-left: 0; }
+  .farm-table tr.notime td.tcell { display: none; }
+}
+
 /* ---- footer ---- */
 .footer { border-top: 1px solid var(--line); padding: 16px var(--gutter) 22px; color: var(--muted); font-size: 13px; background: var(--bg-2); }
 .footer-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -373,7 +430,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   .news > summary { padding: 9px 12px; }
   .news-action { display: none; }
   .news-body { padding: 0 12px 12px; }
-  .news-list li { flex-direction: column; gap: 2px; }
+  .news-list li { column-gap: 14px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .card, .button, .chip { transition: border-color .12s, background-color .12s, color .12s; }

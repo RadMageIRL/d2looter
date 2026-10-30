@@ -80,6 +80,87 @@ try {
     await snap('calc');
   });
 
+  // Where to farm. Inputs are filled the way typing ends: an input event per change, then change.
+  const farmRows = "[...document.querySelectorAll('#view-farm .farm-table tbody tr')].map((r) => r.dataset.key)";
+  const typeInto = (sel, value) => page.eval(`(() => { const i = document.querySelector(${JSON.stringify(sel)}); i.focus(); i.value = ${JSON.stringify(value)};
+    i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await test('where to farm: the item page button opens it with the item picked, every target ranked by chance per run', async () => {
+    await page.eval("localStorage.removeItem('d2looter:v1:settings')");
+    await go('#item/u:Harlequin Crest');
+    await page.eval("document.querySelector('#view-item a.button[href^=\"#farm/\"]').click()");
+    await page.waitFor("location.hash === '#farm/u%3AHarlequin%20Crest' && document.querySelectorAll('#view-farm .farm-table tbody tr').length > 0");
+    assert.equal(await page.eval("document.querySelector('#view-farm input[role=combobox]').value"), 'Harlequin Crest (Shako)');
+    assert.equal(await page.eval("document.querySelector('.tabs a[aria-current=page]').dataset.view"), 'farm');
+    assert.match(await page.eval(text('#view-farm h3')), /^Harlequin Crest on all three difficulties$/);
+    assert.match(await page.eval("document.getElementById('view-farm').textContent"), /Ranked by chance per run, because no run times are entered/);
+    const keys = await page.eval(farmRows);
+    assert.equal(keys.length, 15, 'the first fifteen');
+    assert.ok(keys.includes('g:Act 4 - Diablo 1@2') && keys.includes('b:mephisto@2'), keys.join(', '));
+    const perRun = await page.eval("[...document.querySelectorAll('#view-farm .farm-table tbody tr td:nth-child(4)')].map((td) => Number(td.firstChild.textContent.replace(/^1 in |,/g, '')))");
+    for (let i = 1; i < perRun.length; i++) assert.ok(perRun[i] >= perRun[i - 1], `row ${i}: 1 in ${perRun[i]} after 1 in ${perRun[i - 1]}`);
+    assert.ok(await page.eval("[...document.querySelectorAll('#view-farm .more button')].some((b) => /^Show more/.test(b.textContent))"));
+    // A target opens the drop calculator on its difficulty.
+    await page.eval("document.querySelector('#view-farm tr[data-key=\"b:mephisto@2\"] button.link').click()");
+    await page.waitFor("location.hash === '#calc' && document.querySelector('#view-calc h3')");
+    assert.equal(await page.eval(text('#view-calc h3')), 'Harlequin Crest from Mephisto in Durance of Hate Level 3 (Hell)');
+    clean();
+  });
+  await test('where to farm: a run time ranks that run by chance per hour and keeps the cursor; an unreadable time is flagged and not used', async () => {
+    await go('#farm/u:Harlequin Crest');
+    await page.waitFor("document.querySelectorAll('#view-farm .farm-table tbody tr').length > 0");
+    await typeInto('#view-farm tr[data-key="b:baalcrab@2"] input.time', '45');
+    await page.waitFor("document.querySelectorAll('#view-farm h4').length === 2");
+    assert.deepEqual(await page.eval("[...document.querySelectorAll('#view-farm h4')].map((h) => h.textContent)"), ['Your runs, by chance per hour', 'Other targets, by chance per run']);
+    assert.equal(await page.eval("document.activeElement.getAttribute('data-focus') + ' ' + document.activeElement.value"), 'time:b:baalcrab@2 0:45', 'focus follows the row, and 45 reads as 0:45');
+    await typeInto('#view-farm tr[data-key="b:mephisto@2"] input.time', '1:15');
+    await page.waitFor("document.querySelectorAll('#view-farm .farm-table')[0].querySelectorAll('tbody tr').length === 2");
+    // 1 in 1,709 every 45 s beats 1 in 1,648 every 75 s.
+    assert.deepEqual(await page.eval("[...document.querySelectorAll('#view-farm .farm-table')[0].querySelectorAll('tbody tr')].map((r) => r.dataset.key)"), ['b:baalcrab@2', 'b:mephisto@2']);
+    const meph = await page.eval("[...document.querySelectorAll('#view-farm tr[data-key=\"b:mephisto@2\"] td')].map((td) => td.textContent)");
+    assert.equal(meph[7], '2.87%', 'chance per hour: 1 - (1 - 1/1648)^48');
+    assert.equal(meph[8], '34 h', 'a drop every 1,648 x 75 s on average');
+    assert.equal(meph[9], '5.66%96 runs', 'two hours: 96 whole runs');
+    assert.match(await page.eval(text('#view-farm .farm-best')), /^Best of your runs: Baal on Hell, [\d.]+% per hour, a drop every [\d.]+ h on average\.$/);
+    await new Promise((r) => setTimeout(r, 300)); // settings are saved a moment after a change
+    const saved = JSON.parse(await page.eval("localStorage.getItem('d2looter:v1:settings')")).farm.times;
+    assert.deepEqual(saved, { 'b:baalcrab@2': 45, 'b:mephisto@2': 75 });
+    // Unreadable: flagged, not saved, not ranked.
+    await typeInto('#view-farm tr[data-key="b:andariel@2"] input.time', '1:5');
+    const bad = await page.eval("(() => { const i = document.querySelector('#view-farm tr[data-key=\"b:andariel@2\"] input.time'); return [i.getAttribute('aria-invalid'), i.nextElementSibling.hidden, i.nextElementSibling.textContent, i.closest('tr').classList.contains('notime')]; })()");
+    assert.deepEqual(bad, ['true', false, 'Type a time like 1:30 or 90s.', true]);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.ok(!('b:andariel@2' in JSON.parse(await page.eval("localStorage.getItem('d2looter:v1:settings')")).farm.times));
+    // Clearing a time moves the run back.
+    await typeInto('#view-farm tr[data-key="b:mephisto@2"] input.time', '');
+    await page.waitFor("document.querySelectorAll('#view-farm .farm-table')[0].querySelectorAll('tbody tr').length === 1");
+    await page.eval("[...document.querySelectorAll('#view-farm button')].find((b) => b.textContent === 'Clear these run times').click()");
+    await page.waitFor("document.querySelectorAll('#view-farm h4').length === 0");
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(JSON.parse(await page.eval("localStorage.getItem('d2looter:v1:settings')")).farm.times, {});
+    clean();
+    await snap('farm');
+  });
+  await test('where to farm: switching the game version keeps the item; an item missing from a version, and an empty difficulty, say why', async () => {
+    await go('#farm/u:Bloodletter');
+    await page.eval("(() => { const s = document.getElementById('profile'); s.value = 'd2r-rotw'; s.dispatchEvent(new Event('change')); })()");
+    await page.waitFor("/Reign of the Warlock/.test(document.querySelector('#view-farm .view-head p').textContent) && document.querySelector('#view-farm h3')", 15000);
+    const why = await page.eval("document.querySelector('#view-farm > div:last-child').textContent");
+    assert.ok(why.includes('Ladder only in Season 15, and the game is set to non-ladder.'), why);
+    await page.eval("(() => { const s = document.getElementById('profile'); s.value = 'lod-114d'; s.dispatchEvent(new Event('change')); })()");
+    await page.waitFor("/1\\.14d/.test(document.querySelector('#view-farm .view-head p').textContent) && document.querySelectorAll('#view-farm .farm-table tbody tr').length > 0", 15000);
+    assert.match(await page.eval(text('#view-farm h3')), /^Bloodletter on all three difficulties$/);
+    await go("#farm/u:Defender's Bile");
+    assert.equal(await page.eval("document.querySelector('#view-farm > div:last-child').textContent"), 'That item is not in Diablo II: LoD 1.14d. Pick one above.');
+    await page.eval("(() => { const s = document.getElementById('profile'); s.value = 'd2r-base'; s.dispatchEvent(new Event('change')); })()");
+    await go('#farm/u:Harlequin Crest');
+    await page.eval("(() => { const s = document.querySelector('#view-farm select'); s.value = '0'; s.dispatchEvent(new Event('change')); })()");
+    await page.waitFor("/No boss or superunique drops it on Normal/.test(document.getElementById('view-farm').textContent)");
+    assert.ok((await page.eval("document.getElementById('view-farm').textContent")).includes('No boss or superunique has its base, Shako, in its treasure class on Normal.'));
+    await page.eval("(() => { const s = document.querySelector('#view-farm select'); s.value = 'all'; s.dispatchEvent(new Event('change')); })()");
+    await go('#calc');
+    clean();
+  });
+
   await test('switching to 1.14d loads its data and recalculates', async () => {
     await page.eval("(() => { const s = document.getElementById('profile'); s.value = 'lod-114d'; s.dispatchEvent(new Event('change')); })()");
     await page.waitFor("window.D2LOOTER_DATA && window.D2LOOTER_DATA['lod-114d'] && /1\\.14d/.test(document.querySelector('#view-calc p.muted').textContent)", 15000);
@@ -157,6 +238,9 @@ try {
     await go('#accuracy');
     const t = await page.eval("document.getElementById('view-accuracy').textContent");
     for (const s of ['blizzhackers/d2data', 'silospen/DropCalc', 'Not modeled yet', 'Where sources disagree']) assert.ok(t.includes(s), s);
+    // Diablo Clone's Annihilus is calculated; meeting him is not modeled.
+    assert.ok(t.includes('Diablo Clone (Uber Diablo) is calculated from his treasure class') && !t.includes('Annihilus (Diablo Clone)'), 'Annihilus disclosure');
+    assert.ok(t.includes('How often you meet an Uber boss.'));
     clean();
     await snap('accuracy');
   });
@@ -308,10 +392,57 @@ try {
     clean();
   });
 
+  // The headline rows span the list, the list spans the panel, and each date ends at the row's right
+  // edge on the headline's first line. On a phone a long headline wraps beside its date.
+  const NEWS_LAYOUT = `(() => {
+    const list = document.getElementById('news-list'), body = document.getElementById('news-body');
+    const pad = parseFloat(getComputedStyle(body).paddingLeft) + parseFloat(getComputedStyle(body).paddingRight);
+    const rows = [...list.querySelectorAll('li')].map((li) => {
+      const r = li.getBoundingClientRect(), a = li.querySelector('a').getBoundingClientRect(), t = li.querySelector('time').getBoundingClientRect();
+      return { li: [r.left, r.right, r.width], a: [a.left, a.right, a.height], t: [t.left, t.right, t.top - a.top], border: getComputedStyle(li).borderTopWidth };
+    });
+    return { listWidth: list.getBoundingClientRect().width, bodyInner: body.clientWidth - pad, rows, scroll: document.documentElement.scrollWidth, inner: innerWidth };
+  })()`;
+  const checkNewsLayout = (l, name) => {
+    assert.ok(Math.abs(l.listWidth - l.bodyInner) <= 1, `${name}: list ${l.listWidth} of ${l.bodyInner}`);
+    l.rows.forEach((r, i) => {
+      assert.ok(Math.abs(r.li[2] - l.listWidth) <= 1, `${name} row ${i} spans the list`);
+      assert.ok(Math.abs(r.t[1] - r.li[1]) <= 1, `${name} row ${i}: the date ends at the right edge (${r.t[1]} vs ${r.li[1]})`);
+      assert.ok(r.a[0] - r.li[0] <= 1 && r.a[1] < r.t[0], `${name} row ${i}: the headline is left of the date`);
+      assert.ok(Math.abs(r.t[2]) <= 6, `${name} row ${i}: the date sits on the headline's first line`);
+      assert.equal(r.border, i === 0 ? '0px' : '1px', `${name} row ${i} divider`);
+    });
+    assert.ok(l.scroll <= l.inner, `${name}: page is ${l.scroll}px wide`);
+  };
+  await test('news layout: headlines span the panel, each date at the far right, with dividers; a long headline wraps on a phone without sideways scrolling', async () => {
+    await freshItems({ newsOpen: true });
+    await page.waitFor("document.querySelectorAll('#news-list li').length === 6");
+    const desk = await page.eval(NEWS_LAYOUT);
+    checkNewsLayout(desk, '1280');
+    assert.ok(desk.listWidth > 1000, `the list is ${desk.listWidth}px, not capped`);
+    assert.ok(desk.rows.every((r) => r.a[2] < 24), 'one line each on a desktop');
+    // A long headline, kept in the browser as if just read.
+    const long = 'Diablo II: Resurrected Patch 3.3.1 Notes: Sorceress, Paladin, Necromancer and Warlock Changes, Rune Words, Terror Zones and an Unbreakablewordthatgoesonandonandonforever';
+    await page.viewport(390, 844, true);
+    await page.eval(`localStorage.setItem('d2looter:v1:news', JSON.stringify({ fetchedAt: Date.now(), items: [{ title: ${JSON.stringify(long)}, link: 'https://news.blizzard.com/en-us/article/1/x', date: '2026-10-28T17:00:00.000Z' },
+      { title: 'Short', link: 'https://news.blizzard.com/en-us/article/2/y', date: '2026-10-01T17:00:00.000Z' }] }))`);
+    await page.reload();
+    await page.waitFor(VISIBLE);
+    await page.waitFor("document.querySelectorAll('#news-list li').length === 2");
+    const phone = await page.eval(NEWS_LAYOUT);
+    checkNewsLayout(phone, '390');
+    assert.ok(phone.rows[0].a[2] > 60, `the long headline wraps (${phone.rows[0].a[2]}px tall)`);
+    assert.ok(phone.rows[0].a[1] <= phone.rows[0].t[0], 'and stays left of its date');
+    await snap('phone-news-long');
+    await page.eval("localStorage.removeItem('d2looter:v1:news')");
+    await page.viewport(1280, 900);
+    clean();
+  });
+
   await test('phone width: no sideways scrolling on any view, with the news panel open', async () => {
     await page.viewport(390, 844, true);
     await freshItems({ newsOpen: true });
-    for (const v of ['#items', '#item/u:Harlequin Crest', '#calc', '#sim', '#grail', '#mf', '#runes', '#accuracy']) {
+    for (const v of ['#items', '#item/u:Harlequin Crest', '#calc', '#farm/u:Harlequin Crest', '#sim', '#grail', '#mf', '#runes', '#accuracy']) {
       await go(v);
       if (v === '#items') await page.waitFor("document.querySelectorAll('#news-list li').length > 0");
       const w = await page.eval('document.documentElement.scrollWidth');

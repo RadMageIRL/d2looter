@@ -3,7 +3,7 @@
   'use strict';
 
   var Store = window.D2Store, Prob = window.D2Prob, Engine = window.D2Engine, Props = window.D2Props;
-  var Catalog = window.D2Catalog, Sources = window.D2Sources, Grail = window.D2Grail;
+  var Catalog = window.D2Catalog, Sources = window.D2Sources, Grail = window.D2Grail, Farm = window.D2Farm;
   var PROFILES = window.D2LOOTER_PROFILES;
   var DIFFS = ['Normal', 'Nightmare', 'Hell'];
   var THEMES = ['system', 'light', 'dark', 'unique'];
@@ -11,7 +11,7 @@
   var PAGE = 60;
   // Matches the ?v= on every asset in index.html (tests/run.mjs checks), so a release reaches
   // browsers and hosts that cache files for a while.
-  var VERSION = '0.2.0';
+  var VERSION = '0.3.0';
 
   // ---------------------------------------------------------------------------------------------
   // helpers
@@ -63,6 +63,8 @@
     grail: { q: '', show: 'all', category: 'all' },
     mf: { mf: 300, item: 'b:uap', ilvl: 85 },
     runes: { q: '', sockets: 'all', makeable: false, hideLadder: false },
+    // Run times (seconds) and area monster kills per run are kept per target, e.g. "b:mephisto@2".
+    farm: { item: 'u:Harlequin Crest', diff: 'all', hours: 2, areas: false, quest: false, times: {}, kills: {} },
     newsOpen: false,
   };
   function loadSettings() {
@@ -79,9 +81,15 @@
     if (THEMES.indexOf(s.theme) < 0) s.theme = 'system';
     s.calc.players = clamp(s.calc.players, 1, 8); s.calc.party = clamp(s.calc.party, 1, s.calc.players);
     s.calc.difficulty = clamp(s.calc.difficulty, 0, 2);
+    if (['all', '0', '1', '2'].indexOf(s.farm.diff) < 0) s.farm.diff = 'all';
+    s.farm.hours = farmHours(s.farm.hours);
+    s.farm.times = Farm.cleanTimes(s.farm.times);
+    s.farm.kills = Farm.cleanKills(s.farm.kills);
     return s;
   }
   function clamp(v, lo, hi) { v = Number(v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : lo; }
+  // Farming time in hours: 0.1 to 1000, two decimals; 2 when it can't be read.
+  function farmHours(v) { v = Number(v); return Number.isFinite(v) && v > 0 ? Math.min(1000, Math.max(0.1, Math.round(v * 100) / 100)) : 2; }
   var settings = loadSettings();
   var saveTimer = null;
   function save() { clearTimeout(saveTimer); saveTimer = setTimeout(function () { Store.write('settings', settings); }, 150); }
@@ -282,7 +290,7 @@
     var hash = decodeURIComponent(location.hash.replace(/^#/, ''));
     var view = hash.split('/')[0] || 'items';
     var arg = hash.indexOf('/') >= 0 ? hash.slice(hash.indexOf('/') + 1) : '';
-    var views = { items: renderItems, item: renderItem, calc: renderCalc, sim: renderSim, grail: renderGrail, mf: renderMF, runes: renderRunes, accuracy: renderAccuracy };
+    var views = { items: renderItems, item: renderItem, calc: renderCalc, farm: renderFarm, sim: renderSim, grail: renderGrail, mf: renderMF, runes: renderRunes, accuracy: renderAccuracy };
     if (!views[view]) view = 'items';
     document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.dataset.view !== view; });
     // The news panel sits at the top of the item search only.
@@ -408,7 +416,8 @@
     var panel = h('div', { class: 'panel' });
     var d = c.difficulty;
     var diffSel = h('select', { class: 'select', 'aria-label': 'Difficulty', onchange: function () { c.difficulty = Number(diffSel.value); save(); var p = sourcesPanel(x); panel.replaceWith(p); } }, DIFFS.map(function (n, i) { return option(i, n, i === d); }));
-    panel.appendChild(h('div', { class: 'view-head' }, h('h3', { style: 'margin:0' }, 'Where it drops'), diffSel));
+    panel.appendChild(h('div', { class: 'view-head' }, h('h3', { style: 'margin:0' }, 'Where it drops'),
+      h('span', { class: 'head-actions' }, diffSel, h('a', { class: 'button', href: '#farm/' + encodeURIComponent(x.id) }, 'Where to farm'))));
     panel.appendChild(h('p', { class: 'muted small' }, 'Chance per kill with your calculator settings: MF ' + c.mf + ', ' + c.players + ' player' + (c.players > 1 ? 's' : '') + ', party ' + c.party + ', ' + gameModeText() + '.'));
     var target = targetFor(x);
     var rows = P.sources.fixed(d).map(function (s) {
@@ -601,14 +610,7 @@
     form.appendChild(field('Players in the game (or /players)', pl));
     var pa = h('select', { class: 'select', onchange: function () { c.party = Number(pa.value); save(); compute(); } }, range(1, c.players).map(function (n) { return option(n, n === 1 ? '1 (just you)' : String(n), n === c.party); }));
     form.appendChild(field('Party members in your area, you included', pa));
-    if (P.data.game === 'lod') {
-      var rs = h('select', { class: 'select', onchange: function () { c.realm = rs.value; save(); compute(); } },
-        [['open', 'Single player or open Battle.net'], ['realm', 'Battle.net realm, non-ladder'], ['ladder', 'Battle.net realm, ladder']].map(function (o) { return option(o[0], o[1], c.realm === o[0]); }));
-      form.appendChild(field('Game', rs));
-    } else {
-      var ld = h('select', { class: 'select', onchange: function () { c.ladder = ld.value === '1'; save(); compute(); } }, option('0', 'Non-ladder', !c.ladder), option('1', 'Ladder (Season ' + P.data.ladderSeason + ')', c.ladder));
-      form.appendChild(field('Game', ld));
-    }
+    form.appendChild(field('Game', gameSelect(compute)));
     var runs = h('input', { class: 'input num', type: 'number', min: 1, max: 1e7, step: 1, value: c.runs, oninput: function () { c.runs = clamp(runs.value, 1, 1e7); save(); compute(); } });
     form.appendChild(field('Kills', runs));
 
@@ -647,6 +649,17 @@
     compute();
   }
   function field(label, control, wide) { return h('div', { class: 'field' + (wide ? ' wide' : '') }, h('label', null, label), control); }
+  // 1.14d: single player, realm non-ladder or realm ladder; D2R: non-ladder or ladder.
+  function gameSelect(after) {
+    var c = settings.calc;
+    if (P.data.game === 'lod') {
+      var rs = h('select', { class: 'select', onchange: function () { c.realm = rs.value; save(); after(); } },
+        [['open', 'Single player or open Battle.net'], ['realm', 'Battle.net realm, non-ladder'], ['ladder', 'Battle.net realm, ladder']].map(function (o) { return option(o[0], o[1], c.realm === o[0]); }));
+      return rs;
+    }
+    var ld = h('select', { class: 'select', onchange: function () { c.ladder = ld.value === '1'; save(); after(); } }, option('0', 'Non-ladder', !c.ladder), option('1', 'Ladder (Season ' + P.data.ladderSeason + ')', c.ladder));
+    return ld;
+  }
   function range(a, b) { var out = []; for (var i = a; i <= b; i++) out.push(i); return out; }
 
   function whyNot(x, r) {
@@ -673,6 +686,260 @@
     }
     lines.push('Magic Find does not change whether the base item drops; it only changes its quality.');
     return h('details', { class: 'why' }, h('summary', null, 'How this was worked out'), h('ul', null, lines.map(function (t) { return h('li', null, t); })));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Where to farm
+  // ---------------------------------------------------------------------------------------------
+  // Every boss and superunique that can drop the item, and on request every area monster, compared
+  // per kill and per run (js/core/farm.js) with the drop calculator's Magic Find, players and game.
+  // Run times are the player's own and are kept per target. Without them the list is ranked by
+  // chance per run, never by a guess at which run is faster. A row that gets a run time moves up to
+  // "Your runs" once the time is entered (Enter, Tab or a click elsewhere); focus stays on the
+  // control it was on, wherever that row lands.
+  var FARM_PAGE = 15;
+  var farmShown = FARM_PAGE;
+  var farmJob = 0; // a newer calculation stops an older area monster ranking
+  // A re-rank waits until no pointer is held down, so a click that ends the typing still lands.
+  var pointerHeld = false, afterPointer = null;
+  document.addEventListener('pointerdown', function () { pointerHeld = true; }, true);
+  ['pointerup', 'pointercancel'].forEach(function (t) {
+    document.addEventListener(t, function () { pointerHeld = false; if (afterPointer) { var f = afterPointer; afterPointer = null; setTimeout(f, 0); } }, true);
+  });
+  function farmDiffs() { return settings.farm.diff === 'all' ? [0, 1, 2] : [Number(settings.farm.diff)]; }
+  function diffsText(diffs) { return diffs.length === 3 ? 'all three difficulties' : DIFFS[diffs[0]]; }
+  function hoursText(v) { return v < 1 ? Math.round(v * 60) + ' min' : String(v) + ' h'; }
+
+  function renderFarm(root, arg) {
+    var f = settings.farm, c = settings.calc;
+    if (arg && arg !== f.item) { f.item = arg; farmShown = FARM_PAGE; save(); }
+    clear(root);
+    root.appendChild(h('div', { class: 'view-head' }, h('div', null, h('h2', null, 'Where to farm'),
+      h('p', { class: 'muted' }, 'Every boss and superunique that can drop an item in ' + P.meta.label + ', compared per kill, per run and, with your own run times, per hour.'))));
+    var form = h('div', { class: 'form' });
+    root.appendChild(h('div', { class: 'panel' }, form, h('p', { class: 'muted small', style: 'margin:12px 0 0' }, 'Magic Find, players, party and game are shared with the drop calculator.')));
+    var result = h('div');
+    root.appendChild(result);
+
+    form.appendChild(itemPicker(f.item, function (x) {
+      f.item = x.id; farmShown = FARM_PAGE; save();
+      history.replaceState(null, '', '#farm/' + encodeURIComponent(x.id));
+      compute();
+    }));
+    var diff = h('select', { class: 'select', onchange: function () { f.diff = diff.value; farmShown = FARM_PAGE; save(); compute(); } },
+      option('all', 'All difficulties', f.diff === 'all'), DIFFS.map(function (n, i) { return option(String(i), n, f.diff === String(i)); }));
+    form.appendChild(field('Difficulty', diff));
+    var mfTimer = null;
+    var mf = h('input', { class: 'input num', type: 'number', min: -100, max: 9999, step: 1, value: c.mf, oninput: function () { c.mf = clamp(mf.value, -100, 9999); save(); clearTimeout(mfTimer); mfTimer = setTimeout(compute, 250); } });
+    form.appendChild(field('Magic Find %', mf));
+    var pl = h('select', { class: 'select', onchange: function () { c.players = Number(pl.value); c.party = Math.min(c.party, c.players); save(); renderFarm(root); } }, range(1, 8).map(function (n) { return option(n, String(n), n === c.players); }));
+    form.appendChild(field('Players in the game (or /players)', pl));
+    var pa = h('select', { class: 'select', onchange: function () { c.party = Number(pa.value); save(); compute(); } }, range(1, c.players).map(function (n) { return option(n, n === 1 ? '1 (just you)' : String(n), n === c.party); }));
+    form.appendChild(field('Party members in your area, you included', pa));
+    form.appendChild(field('Game', gameSelect(compute)));
+    var hours = h('input', { class: 'input num', type: 'number', min: 0.5, max: 1000, step: 0.5, value: f.hours, oninput: function () { if (!(Number(hours.value) > 0)) return; f.hours = farmHours(hours.value); save(); draw(); } });
+    form.appendChild(field('Farming time (hours)', hours));
+    var ar = h('input', { type: 'checkbox', checked: f.areas, onchange: function () { f.areas = ar.checked; farmShown = FARM_PAGE; save(); compute(); } });
+    var qk = h('input', { type: 'checkbox', checked: f.quest, onchange: function () { f.quest = qk.checked; save(); compute(); } });
+    form.appendChild(h('div', { class: 'field wide checks' },
+      h('label', { class: 'check' }, ar, 'Include area monsters (per kill; how many spawn is not modeled)'),
+      h('label', { class: 'check' }, qk, 'Include quest kills (the first kill while the act\'s quest is open)')));
+
+    var state = null;
+    function compute() {
+      farmJob++;
+      var x = P.byId.get(f.item);
+      if (!x) {
+        state = null;
+        clear(result).appendChild(h('div', { class: 'panel' }, h('p', null, f.item ? 'That item is not in ' + P.meta.label + '. Pick one above.' : 'Pick an item above.')));
+        return;
+      }
+      var diffs = farmDiffs(), o = calcOpts(false), opts = { players: o.players, party: o.party, mf: o.mf, ladder: o.ladder };
+      var key = ['farm', x.id, diffs.join(''), opts.players, opts.party, opts.mf, opts.ladder].join('|');
+      if (P.cache.size > 60) P.cache.clear();
+      var base = P.cache.get(key);
+      if (!base) { base = Farm.fixedRows(P.eng, P.sources, targetFor(x), opts, diffs); P.cache.set(key, base); }
+      state = { x: x, diffs: diffs, base: base, areas: f.areas ? P.cache.get(key + '|areas') || null : null, working: null };
+      if (f.areas && !state.areas) rankAreaMonsters(x, opts, diffs, key);
+      draw();
+    }
+    // Every area monster on the chosen difficulties, a batch at a time so the page stays responsive.
+    function rankAreaMonsters(x, opts, diffs, key) {
+      var job = farmJob, prof = P, st = state, target = targetFor(x), jobs = Farm.areaJobs(P.sources, diffs), found = [], i = 0;
+      st.working = { done: 0, total: jobs.length };
+      (function step() {
+        if (job !== farmJob || prof !== P || root.hidden) return;
+        var end = Math.min(jobs.length, i + 150);
+        for (; i < end; i++) { var r = Farm.areaRow(P.eng, jobs[i], target, opts); if (r) found.push(r); }
+        st.working.done = i;
+        if (i < jobs.length) { var w = result.querySelector('.farm-working'); if (w) w.textContent = workingText(st); setTimeout(step, 0); return; }
+        P.cache.set(key + '|areas', found);
+        st.areas = found; st.working = null;
+        draw();
+      })();
+    }
+    function workingText(st) { return 'Checking area monsters: ' + fmtInt(st.working.done) + ' of ' + fmtInt(st.working.total) + '.'; }
+
+    function draw() {
+      if (!state) return;
+      var x = state.x;
+      var rows = state.base.rows.filter(function (r) { return f.quest || !(r.source && r.source.quest); });
+      if (state.areas) rows = rows.concat(state.areas);
+      var ranked = Farm.rank(rows, { times: f.times, kills: f.kills, hours: f.hours });
+      var box = h('div', { class: 'panel' });
+      clear(result).appendChild(box);
+      box.appendChild(h('h3', null, h('span', { class: qClass(x) }, x.name), ' on ' + diffsText(state.diffs)));
+      box.appendChild(h('p', { class: 'muted small' }, 'MF ' + c.mf + ', ' + c.players + ' player' + (c.players > 1 ? 's' : '') + ', party ' + c.party + ', ' + gameModeText() + '. ' +
+        fmtInt(rows.length) + ' way' + (rows.length === 1 ? '' : 's') + ' to farm it' + (state.areas ? ', area monsters included' : '') + '.'));
+      if (state.working) box.appendChild(h('p', { class: 'muted small farm-working', role: 'status' }, workingText(state)));
+      if (!rows.length) {
+        if (!state.working) box.appendChild(farmEmpty(x, state));
+        box.appendChild(farmNotes());
+        return;
+      }
+      var best = ranked.timed[0];
+      if (best) {
+        box.appendChild(h('p', { class: 'farm-best' }, 'Best of your runs: ', h('strong', null, best.row.name), ' on ' + DIFFS[best.row.difficulty] + ', ' +
+          Prob.percent(best.time.perHour, 2) + ' per hour, a drop every ' + Farm.formatDuration(best.time.expectedSeconds) + ' on average.'));
+        box.appendChild(h('h4', null, 'Your runs, by chance per hour'));
+        box.appendChild(farmTable(ranked.timed, x));
+      } else {
+        var top = ranked.untimed[0];
+        box.appendChild(h('p', { class: 'farm-best' }, 'Highest chance per run: ', h('strong', null, top.row.name), ' on ' + DIFFS[top.row.difficulty] + ', ' + Prob.oneIn(top.runChance) +
+          (top.killsPerRun > 1 ? ' (' + top.killsPerRun + ' kills)' : '') + '.'));
+        box.appendChild(h('p', { class: 'muted small' }, 'Ranked by chance per run, because no run times are entered: this says nothing about which run is faster. A run of one boss or superunique is one kill, so its runs are kills. Type how long a run takes you in the Run time column to rank your runs by chance per hour.'));
+      }
+      if (ranked.untimed.length) {
+        if (best) box.appendChild(h('h4', null, 'Other targets, by chance per run'));
+        box.appendChild(farmTable(ranked.untimed.slice(0, farmShown), x));
+        var left = ranked.untimed.length - farmShown;
+        if (left > 0) box.appendChild(h('div', { class: 'more' }, h('button', { type: 'button', class: 'button', onclick: function () { farmShown += FARM_PAGE * 2; draw(); } }, 'Show more (' + fmtInt(left) + ' left)')));
+      }
+      if (ranked.timed.length) {
+        box.appendChild(h('div', { class: 'toolbar', style: 'margin:12px 0 0' }, h('button', { type: 'button', class: 'button small', onclick: function () {
+          ranked.timed.forEach(function (e) { delete f.times[e.row.key]; });
+          save(); draw(); toast('Run times cleared for this list.');
+        } }, 'Clear these run times')));
+      }
+      box.appendChild(farmNotes());
+    }
+
+    // Runs one row of a table; numbers refresh as a run time or a kill count is typed, and the
+    // order changes once the entry is committed.
+    function farmTable(list, x) {
+      var heads = ['Farming target', 'Difficulty', 'Chance per kill', 'Chance per run', 'Runs to a drop (average)', 'Runs for 50% / 90%', 'Run time', 'Chance per hour', 'Time to a drop (average)', 'Chance in ' + hoursText(f.hours)];
+      var cls = ['target', 'diff', 'num', 'num', 'num', 'num', 'tstart', 'num tcell', 'num tcell', 'num tcell'];
+      return h('div', { class: 'table-wrap farm-wrap' }, h('table', { class: 'grid farm-table' },
+        h('thead', null, h('tr', null, heads.map(function (t, i) { return h('th', { class: cls[i] || null, scope: 'col' }, t); }))),
+        h('tbody', null, list.map(function (e) { return farmRow(e, x, heads, cls); }))));
+    }
+    function farmRow(e, x, heads, cls) {
+      var row = e.row;
+      var where = DIFFS[row.difficulty] + (row.area ? ', ' + row.area : '');
+      var td = heads.map(function (t, i) { return h('td', { class: cls[i] || null, 'data-label': t }); });
+      var tr = h('tr', { 'data-key': row.key }, td);
+      // The target, and for an area monster its kills per run.
+      append(td[0], [row.source ? h('button', { type: 'button', class: 'link', title: 'Open in the drop calculator', 'data-focus': 'open:' + row.key, onclick: function () { c.difficulty = row.difficulty; openInCalc(x, row.source); } }, row.name) : h('strong', null, row.name), h('span', { class: 'tag diff-tag' }, DIFFS[row.difficulty])]);
+      var sub = h('div', { class: 'muted small' });
+      if (row.kind === 'group') sub.textContent = (row.area !== row.name ? row.area + ' · ' : '') + row.killsPerRun + ' kills per run';
+      else if (row.kind === 'area') {
+        var kin = h('input', { class: 'input mini', type: 'number', min: 1, max: 10000, step: 1, value: e.killsPerRun, 'aria-label': 'Kills per run of ' + row.name + ', ' + where, 'data-focus': 'kills:' + row.key,
+          oninput: function () {
+            var v = Number(kin.value);
+            if (!(v >= 1 && v <= 10000 && Math.round(v) === v)) return;
+            if (v === 1) delete f.kills[row.key]; else f.kills[row.key] = v;
+            save(); fill();
+          }, onchange: commit });
+        append(sub, [row.area + ' · per kill · ', h('label', { class: 'kills' }, 'kills per run ', kin)]);
+      } else sub.textContent = (row.area || row.group || '') + (row.group === 'Uber bosses' ? ' · reached only through an event' : '') + (row.source && row.source.quest ? ' · first kill while the quest is open' : '');
+      td[0].appendChild(sub);
+      td[1].textContent = DIFFS[row.difficulty];
+      // Per kill: one chance, or each kill of an area run.
+      if (row.kind === 'group') {
+        td[2].className += ' kills-list';
+        row.kills.forEach(function (k) { td[2].appendChild(h('div', { class: 'small' }, h('span', { class: 'muted' }, k.name + ': '), h('span', { class: 'nowrap' }, k.chance > 0 ? Prob.oneIn(k.chance) : 'cannot drop it'))); });
+      } else append(td[2], [Prob.oneIn(row.chance), h('div', { class: 'muted small' }, Prob.percent(row.chance, 3))]);
+      // The run time: blank is "no time", anything unreadable is flagged and counts as no time.
+      var tin = h('input', { class: 'input mini time', type: 'text', maxlength: 24, placeholder: 'm:ss', autocomplete: 'off', spellcheck: 'false', value: e.seconds ? Farm.formatClock(e.seconds) : '',
+        'aria-label': 'Run time for ' + row.name + ', ' + where + ', in minutes and seconds', 'data-focus': 'time:' + row.key,
+        oninput: function () {
+          var s = Farm.parseRunTime(tin.value), bad = Number.isNaN(s);
+          tin.setAttribute('aria-invalid', String(bad));
+          err.hidden = !bad;
+          if (bad || s == null) delete f.times[row.key]; else f.times[row.key] = s;
+          save(); fill();
+        }, onchange: function () { if (!Number.isNaN(Farm.parseRunTime(tin.value))) commit(); } });
+      var err = h('div', { class: 'field-error', hidden: true, id: 'err-' + Math.random().toString(36).slice(2) }, 'Type a time like 1:30 or 90s.');
+      tin.setAttribute('aria-describedby', err.id);
+      append(td[6], [tin, err]);
+      function fill() {
+        var now = Farm.rank([row], { times: f.times, kills: f.kills, hours: f.hours });
+        var n = now.timed[0] || now.untimed[0];
+        clear(td[3]); append(td[3], [Prob.oneIn(n.runChance), h('div', { class: 'muted small' }, Prob.percent(n.runChance, 3))]);
+        td[4].textContent = triesText(n.expectedRuns);
+        td[5].textContent = triesText(n.runs50) + ' / ' + triesText(n.runs90);
+        tr.classList.toggle('notime', !n.time);
+        clear(td[7]); clear(td[8]); clear(td[9]);
+        if (!n.time) { [7, 8, 9].forEach(function (i) { td[i].appendChild(h('span', { class: 'muted', title: 'Enter a run time' }, '-')); }); return; }
+        td[7].textContent = Prob.percent(n.time.perHour, 2);
+        td[8].textContent = Farm.formatDuration(n.time.expectedSeconds);
+        append(td[9], [Prob.percent(n.time.chanceIn, 2), h('div', { class: 'muted small' }, fmtInt(n.time.runsIn) + ' run' + (n.time.runsIn === 1 ? '' : 's'))]);
+      }
+      fill();
+      return tr;
+    }
+    // Redraw in the new order, then put focus back on the same control of the same row.
+    function commit() {
+      var go = function () {
+        var a = document.activeElement, key = a && a.getAttribute ? a.getAttribute('data-focus') : null;
+        var sel = key && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
+        draw();
+        if (!key) return;
+        var el = [].filter.call(result.querySelectorAll('[data-focus]'), function (n) { return n.getAttribute('data-focus') === key; })[0];
+        if (!el) return;
+        el.focus();
+        if (sel && el.type === 'text') try { el.setSelectionRange(el.value.length, el.value.length); } catch (err) { /* not a text field */ }
+      };
+      if (pointerHeld) afterPointer = go; else setTimeout(go, 0);
+    }
+
+    // Why nothing is listed, from the data: never rolled at random, ladder, a condition, no treasure
+    // class with its base, or every source that drops its base is below its item level.
+    function farmEmpty(x, st) {
+      var named = namedOnlyNote(x);
+      if (named) return h('p', null, named);
+      var why = [];
+      if (x.ladder && Engine.ladderOnly(x.ladder, P.data.ladderSeason) && !ladderAllowed()) why.push(x.ladderText + ', and the game is set to ' + gameModeText() + '.');
+      if (x.cond) why.push('The game data only allows it when: ' + x.cond + '.');
+      var holding = 0, top = 0;
+      st.diffs.forEach(function (d) {
+        P.sources.fixed(d).forEach(function (s) {
+          var info = P.eng.sourceTc(s.src, d, s.quest), lvl = P.eng.monsterLevel(s.src, d);
+          if (!info || !info.idx || !P.eng.reach(P.eng.tcs[info.idx].name).has(x.code)) return;
+          holding++; if (lvl > top) top = lvl;
+        });
+      });
+      if (!holding) why.push('No boss or superunique has its base, ' + x.baseName + ', in its treasure class on ' + diffsText(st.diffs) + '.');
+      else if ((x.kind === 'unique' || x.kind === 'set') && top < x.lvl) why.push('The bosses and superuniques that drop its base, ' + x.baseName + ', are level ' + top + ' at most, below its item level of ' + x.lvl + '.');
+      if (!f.quest && st.base.rows.some(function (r) { return r.source && r.source.quest; })) why.push('Only quest kills drop it here: tick "Include quest kills" to list them.');
+      if (!f.areas) why.push('Tick "Include area monsters" to check every monster in every area as well.');
+      return h('div', null, h('p', { class: 'unavailable' }, 'No boss or superunique' + (f.areas ? ' or area monster' : '') + ' drops it on ' + diffsText(st.diffs) + ' with these settings.'),
+        h('ul', { class: 'why' }, why.map(function (t) { return h('li', null, t); })));
+    }
+    function farmNotes() {
+      return h('div', { class: 'farm-notes' },
+        h('p', { class: 'muted small' }, 'A run counts only the kills listed for it. Minions and the other monsters on the way are not counted, so they can only add to these chances. Desecrated (Terror) zones, Heralds and the Uber Tristram bosses are not calculated.'),
+        h('details', { class: 'why' }, h('summary', null, 'What is and is not counted'), h('ul', null, [
+          'Chances per kill come from the game\'s treasure classes through the same rules as the drop calculator, with your Magic Find, players, party and game. Kills are independent, so a run of several kills has a chance of 1 - (1 - p1)(1 - p2)...',
+          'A run of one boss or superunique is one kill. Where several bosses and superuniques share an area, that area is also listed as one run that kills all of them; the Baal run adds Baal to the five wave bosses of the Throne of Destruction.',
+          'Area monsters are per kill. How many of each monster spawn in an area is not modeled, so whole-area runs such as the Pit, the Ancient Tunnels or the Cow Level are not ranked for you: enter how many of that monster you kill in a run.',
+          'Run times are yours. D2Looter does not know how long a run takes, so without them it ranks by chance per run, not by speed. Chance per hour assumes runs back to back; the chance in your farming time counts whole runs only.',
+          'Quest kills (the first kill while the act\'s quest is open) are left out unless you include them, because most players cannot repeat them run after run.',
+          'Uber bosses are listed per kill, but reaching one takes an event: the Pandemonium keys for Lilith, Uber Duriel and Uber Izual, and Stones of Jordan sold to merchants for Diablo Clone. Diablo Clone\'s treasure class always gives Annihilus in Hell, so his 1 in 1 is the chance once he is killed, not a run you can repeat.',
+          'Not calculated: Desecrated (Terror) zones; Heralds and Uber Ancients; the Uber Tristram bosses, which have no treasure class in the game data (the Hellfire Torch comes from them by script); quest items; the once-per-game unique rule; gambling and cube recipes.',
+        ].map(function (t) { return h('li', null, t); }))));
+    }
+    compute();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1034,6 +1301,8 @@
       'Each kill is resolved from the monster\'s treasure class down to single items, following the 1.14d drop rules written up in d2data\'s item-drop-spec.md: monster level, the treasure class upgrade in Nightmare and Hell, NoDrop scaled by player count and party, picks, the six-item limit, and the unique, set, rare and magic rolls with Magic Find.',
       'The six-item limit is followed exactly: a boss with seven picks only makes its seventh pick after an earlier pick dropped nothing. Some calculators treat seven picks as six, which gives lower numbers for bosses.',
       'Chances are per kill, for one kill in a fresh game. "Kills for 50%" and the run math treat kills as independent.',
+      'Diablo Clone (Uber Diablo) is calculated from his treasure class like any other monster. In Hell that class holds only Annihilus, so a kill drops it every time (1 in 1); the tables also give him Normal and Nightmare classes, which are calculated the same way. That is the chance once he is killed, not how often he appears: see "Not modeled yet".',
+      'Where to farm uses the same chances per kill. A run of several kills has a chance of 1 - (1 - p1)(1 - p2)..., counting only the kills listed for it. Chance per hour and the time to a drop come from the run times you enter; D2Looter has no run times of its own.',
     ]));
     root.appendChild(sec('How it was checked', [
       h('span', null, h('strong', null, 'The data. '), 'The 1.14d tables match a second, independent copy (Silospen DropCalc\'s .txt files) in every drop-relevant field. The 3.3 Reign of the Warlock tables differ from Silospen\'s 3.2 copy only where patch 3.3 changed them (The Battlebranch item level 34 to 30, Sunder Charm level 69 to 75, Herald quality, Worldstone Shard and Ancient Statue rates, the changed uniques becoming ladder only). Every unique, set item and runeword shows exactly the properties of its source row.'),
@@ -1053,7 +1322,8 @@
     root.appendChild(sec('Not modeled yet', [
       'Desecrated (Terror) zones and the Sunder Charms they drop, in both D2R rulesets; Heralds, Uber Ancients and Worldstone Shards in Reign of the Warlock.',
       'Classic (non-expansion) games: different monster levels, no treasure class upgrade, quality options on entries.',
-      'Scripted drops outside treasure classes: quest items, Hellfire Torch, Annihilus (Diablo Clone), the Cow King\'s potions.',
+      'Scripted drops outside treasure classes: quest items, the Cow King\'s potions, and everything the Uber Tristram bosses drop, the Hellfire Torch included (their monster rows have no treasure class).',
+      'How often you meet an Uber boss. Their kills are calculated, but each one appears only through an event: the Pandemonium keys for Lilith, Uber Duriel and Uber Izual, and for Diablo Clone, Stones of Jordan sold to merchants (on Battle.net he walks the earth in Hell games; offline, selling one spawns him).',
       'The once-per-game unique rule (a unique already generated in the game cannot drop again), Find Item, and items that cannot find floor space.',
       'Berserk champions (+3 levels, not +2) and monsters raised or summoned during play.',
       'D2R rules are assumed to be the 1.14d rules run on D2R\'s tables. Reign of the Warlock\'s conditional treasure classes follow d2data\'s reading: a class switched off by its condition gives its weight back to its parent.',
